@@ -1,0 +1,25 @@
+<layout id="root" direction="vertical">
+  <container constraint="10%">
+    <block title="Navigation">
+
+    </block>
+  </container>
+  <container constraint="90%">
+    <block title="Body">
+      
+      <layout id="root" direction="horizontal">
+        <container constraint="20%">
+          <block title="Navigation">
+      
+          </block>
+        </container>
+        <container constraint="80%">
+          <block title="Body">
+            
+          </block>
+        </container>
+      </layout>
+
+    </block>
+  </container>
+</layout>

@@ -1,0 +1,7 @@
+<layout id="root" direction="vertical">
+  <container id="widget_container" constraint="4">
+    <p id="paragraph" title="Container" border="left|right|all" align="center">
+      Sample
+    </p>
+  </container>
+</layout>

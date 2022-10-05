@@ -1,0 +1,12 @@
+<layout id="root" direction="vertical">
+  <container constraint="30%">
+    <block title="Nav" border="all">
+
+    </block>
+  </container>
+  <container constraint="70%">
+    <block title="Body" border="all">
+
+    </block>
+  </container>
+</layout>
