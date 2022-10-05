@@ -1,0 +1,12 @@
+<layout id="root" direction="vertical">
+  <container id="nav_container" constraint="5">
+    <p id="toolbar" title="Navigation" border="all" styles="fg:green">
+      This is the navigation
+    </p>
+  </container>
+  <container id="body_container" constraint="10min">
+    <p id="body" title="Body" border="all" styles="fg:red">
+      This is a sample
+    </p>
+  </container>
+</layout>
