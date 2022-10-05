@@ -1,4 +1,4 @@
-# tui-markup
+# tui-markup-renderer
 Rust library to use TUI and markup to build UI terminal interfaces.
 
 ## Explanation
@@ -68,6 +68,8 @@ generates:
 
 ## Planned features
 
-* Add events to widgets
-* Runtime template change
+* Add documentation to use it.
+* Add render loop to simplify the code.
+* Add events to widgets.
+* Runtime template change.
 
