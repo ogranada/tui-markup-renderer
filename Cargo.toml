@@ -3,6 +3,12 @@ name = "tui-markup"
 version = "0.1.0"
 edition = "2021"
 
+description = "Rust library to use TUI and markup to build UI terminal interfaces."
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/ogranada/tui-markup"
+repository = "https://github.com/ogranada/tui-markup"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
