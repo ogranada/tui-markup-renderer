@@ -1,4 +1,5 @@
 use crate::markup_element::MarkupElement;
+use crate::storage::RendererStorage;
 use crate::utils::{color_from_str, extract_attribute};
 use std::collections::HashMap;
 use std::fs::File;
@@ -250,7 +251,7 @@ impl MarkupParser {
         return values;
     }
 
-    pub fn render_ui<B: Backend>(&self, frame: &mut Frame<B>) {
+    pub fn render_ui<B: Backend>(&self, frame: &mut Frame<B>, storage: Option<&impl RendererStorage<B>>) {
         let root = MarkupParser::get_element(self.root.clone());
         // let prnt = MarkupParser::get_element(self.root.clone());
         // print!("{}", prnt);
