@@ -1,106 +1,51 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
-use std::fmt;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::rc::Rc;
 use std::vec::Vec;
-use std::{borrow::BorrowMut, cell::RefCell};
-use tui::layout::{Alignment, Rect};
-use tui::style::{Color, Style};
+use tui::layout::Rect;
 use xml::reader::{EventReader, XmlEvent};
 
-use super::utils::extract_attribute;
-
-const WIDGET_NAMES: &'static [&'static str] = &["block", "p"];
+use crate::markup_element::MarkupElement;
+use crate::render_actions::RenderActions;
+use crate::utils::{
+    extract_attribute, get_alignment, get_border, get_constraint, get_direction, get_styles,
+    is_layout, is_widget,
+};
 
 use tui::{
     backend::Backend,
-    layout::{Constraint, Direction, Layout},
-    widgets::{Block, Borders, Paragraph},
+    layout::{Constraint, Layout},
+    widgets::{Block, Paragraph},
     Frame,
 };
 
-fn color_from_str(input: &str) -> Color {
-    let input = input.to_lowercase();
-    let input = input.as_str();
-    match input {
-        "reset" => Color::Reset,
-        "black" => Color::Black,
-        "red" => Color::Red,
-        "green" => Color::Green,
-        "yellow" => Color::Yellow,
-        "blue" => Color::Blue,
-        "magenta" => Color::Magenta,
-        "cyan" => Color::Cyan,
-        "gray" => Color::Gray,
-        "darkGray" => Color::DarkGray,
-        "lightRed" => Color::LightRed,
-        "lightGreen" => Color::LightGreen,
-        "lightYellow" => Color::LightYellow,
-        "lightBlue" => Color::LightBlue,
-        "lightMagenta" => Color::LightMagenta,
-        "lightCyan" => Color::LightCyan,
-        "white" => Color::White,
-        _ => Color::Reset,
-    }
+use crossterm::{
+    event::{self, Event as CEvent, KeyCode, KeyEvent},
+    terminal::{disable_raw_mode, enable_raw_mode},
+};
+use std::io;
+use std::sync::mpsc;
+use std::thread;
+use std::time::{Duration, Instant};
+use tui::{backend::CrosstermBackend, Terminal};
+
+enum Event<I> {
+    Input(I),
+    Tick,
 }
 
-#[derive(Debug, Clone)]
-pub struct MarkupAttribute {
-    pub name: String,
-    pub value: String,
-}
+/*
+#[cfg(not(test))]
+use std::io::Stdout;
+#[cfg(not(test))]
+use tui::backend::CrosstermBackend;
 
-#[derive(Debug)]
-pub struct MarkupElement {
-    pub deep: usize,
-    pub name: String,
-    pub text: String,
-    pub attributes: HashMap<String, String>,
-    pub children: Vec<Rc<RefCell<MarkupElement>>>,
-    pub parent_node: Option<Rc<RefCell<MarkupElement>>>,
-}
-
-impl Clone for MarkupElement {
-    fn clone(&self) -> Self {
-        MarkupElement {
-            deep: self.deep,
-            name: self.name.clone(),
-            text: self.text.clone(),
-            attributes: self.attributes.clone(),
-            children: self.children.clone(),
-            parent_node: self.parent_node.clone(),
-        }
-    }
-}
-
-impl fmt::Display for MarkupElement {
-    #[inline]
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let attr_vls: String = self
-            .attributes
-            .keys()
-            .map(|key| {
-                let value = self.attributes.get(key);
-                let value = if value.is_some() { value.unwrap() } else { "" };
-                format!(" {}=\"{}\"", key, value)
-            })
-            .collect();
-        let children: String = self
-            .children
-            .iter()
-            .map(|child| format!("{}", child.as_ref().borrow()))
-            .collect();
-        let tab = "\t".repeat(self.deep);
-        let new_str = format!(
-            "{}<{}{}>\n{}\n{}</{}>\n",
-            tab, self.name, attr_vls, children, tab, self.name
-        );
-        fmt::Display::fmt(&new_str, f)
-    }
-}
-
+#[cfg(test)]
+use tui::backend::TestBackend;
+*/
 #[derive(Debug)]
 pub struct MarkupParser {
     pub path: String,
@@ -115,125 +60,122 @@ impl MarkupParser {
         let r = r.as_ref().borrow().to_owned();
         r
     }
-
-    pub fn is_widget(node_name: &str) -> bool {
-        WIDGET_NAMES.contains(&node_name)
-    }
-
-    pub fn is_layout(node_name: &str) -> bool {
-        node_name.eq("layout")
-    }
-
-    pub fn get_border(border: String) -> Borders {
-        if border.contains("|") {
-            let borders = border
-                .split("|")
-                .map(|s| String::from(s))
-                .map(|s| MarkupParser::get_border(s))
-                .collect::<Vec<Borders>>();
-            let size = borders.len();
-            let mut res = borders[0];
-            for i in 1..size {
-                res |= borders[i];
-            }
-            return res;
-        }
-        let border = match border.to_lowercase().as_str() {
-            "all" => Borders::ALL,
-            "bottom" => Borders::BOTTOM,
-            "top" => Borders::TOP,
-            "left" => Borders::LEFT,
-            "right" => Borders::RIGHT,
-            _ => Borders::NONE,
-        };
-        border
-    }
-
-    pub fn get_constraint(constraint: String) -> Constraint {
-        let res = if constraint.ends_with("%") {
-            let constraint_value = constraint.replace("%", "");
-            let constraint_value = constraint_value.parse::<u16>().unwrap_or(1);
-            Constraint::Percentage(constraint_value)
-        } else if constraint.ends_with("min") {
-            let constraint_value = constraint.replace("min", "");
-            let constraint_value = constraint_value.parse::<u16>().unwrap_or(1);
-            Constraint::Min(constraint_value)
-        } else if constraint.ends_with("max") {
-            let constraint_value = constraint.replace("max", "");
-            let constraint_value = constraint_value.parse::<u16>().unwrap_or(1);
-            Constraint::Max(constraint_value)
-        } else if constraint.contains(":") {
-            let parts = constraint.split(":");
-            let parts: Vec<&str> = parts.collect();
-            let x = String::from(parts[0]).parse::<u32>().unwrap_or(1);
-            let y = String::from(parts[1]).parse::<u32>().unwrap_or(1);
-            Constraint::Ratio(x, y)
-        } else {
-            let constraint_value = constraint.parse::<u16>().unwrap_or(1);
-            Constraint::Length(constraint_value)
-        };
-        res
-    }
-
-    pub fn get_direction(node: &MarkupElement) -> Direction {
-        let direction = extract_attribute(node.attributes.clone(), "direction");
-        if direction.eq("horizontal") {
-            Direction::Horizontal
-        } else {
-            Direction::Vertical
-        }
-    }
-
-    pub fn get_alignment(node: &MarkupElement) -> Alignment {
-        let align_text = extract_attribute(node.attributes.clone(), "align");
-        match align_text.as_str() {
-            "center" => Alignment::Center,
-            "left" => Alignment::Left,
-            "right" => Alignment::Right,
-            _ => Alignment::Left,
-        }
-    }
-
-    pub fn get_styles(node: &MarkupElement) -> Style {
-        let mut res = Style::default();
-        let styles_text = extract_attribute(node.attributes.clone(), "styles");
-        if styles_text.len() < 3 {
-            return res;
-        }
-        let styles_vec = styles_text
-            .split(";")
-            .map(|style| style.split(":").map(|word| word.trim()).collect())
-            .map(|data: Vec<&str>| (data[0], data[1]))
-            .collect::<Vec<(&str, &str)>>();
-        let styles: HashMap<&str, &str> = styles_vec.into_iter().collect();
-        if styles.contains_key("bg") {
-            let color = color_from_str(styles.get("bg").unwrap());
-            res = res.bg(color);
-        }
-        if styles.contains_key("fg") {
-            let color = color_from_str(styles.get("fg").unwrap());
-            res = res.fg(color);
-        }
-        res
-    }
-
     fn process_block(&self, child: &MarkupElement) -> Block {
         let title = extract_attribute(child.attributes.clone(), "title");
         let border = extract_attribute(child.attributes.clone(), "border");
-        let border = MarkupParser::get_border(border);
+        let border = get_border(border);
         let block = Block::default().title(title).borders(border);
         block
     }
 
     fn process_paragraph(&self, child: &MarkupElement) -> Paragraph {
-        let styles = MarkupParser::get_styles(&child.clone());
-        let alignment = MarkupParser::get_alignment(&child.clone());
+        let styles = get_styles(&child.clone());
+        let alignment = get_alignment(&child.clone());
         let block = self.process_block(&child.clone());
         let p = Paragraph::new(child.text.clone())
             .style(styles)
             .alignment(alignment)
             .block(block);
         p
+    }
+
+    fn process_layout(
+        &self,
+        frame_size: Rect,
+        node: &MarkupElement,
+        place: Option<Rect>,
+        margin: Option<u16>,
+    ) -> Vec<(Rect, MarkupElement)> {
+        let direction = get_direction(node);
+        let mut res: Vec<(Rect, MarkupElement)> = vec![];
+        let mut constraints: Vec<Constraint> = vec![];
+        let mut widgets_info: Vec<(usize, MarkupElement)> = vec![];
+        let mut layouts_info: Vec<(usize, MarkupElement)> = vec![];
+        for (position, child) in node.children.iter().enumerate() {
+            let borrowed_child = child.as_ref().borrow();
+            if borrowed_child.name.eq("container") {
+                let constraint = extract_attribute(borrowed_child.attributes.clone(), "constraint");
+                constraints.push(get_constraint(constraint));
+                let children = borrowed_child.children.clone();
+                children
+                    .iter()
+                    .map(|child| child.as_ref().borrow())
+                    .for_each(|child| {
+                        let child_name = child.name.as_str();
+                        if is_widget(child_name) {
+                            let son = child.clone();
+                            if son.children.len() > 0 {
+                                let son = son.children[0].clone();
+                                let son = son.as_ref();
+                                let son = son.borrow();
+                                let son_name = son.name.as_str();
+                                if son_name.eq("layout") {
+                                    layouts_info.push((position, son.clone()));
+                                    widgets_info.push((position, child.clone()));
+                                } else {
+                                    widgets_info.push((position, child.clone()));
+                                }
+                            } else {
+                                widgets_info.push((position, child.clone()));
+                            }
+                        } else if is_layout(child_name) {
+                            let partial_res = self.process_node(frame_size, node, None, None);
+                            for pair in partial_res.iter() {
+                                res.push((pair.0, pair.1.clone()));
+                            }
+                        }
+                    })
+            }
+        }
+
+        let layout = Layout::default()
+            .direction(direction)
+            .margin(margin.unwrap_or(0))
+            .constraints(constraints.clone().as_ref());
+
+        let chunks = layout.split(place.unwrap_or(frame_size));
+
+        for (cntr, widget_info) in widgets_info.iter() {
+            let counter = *cntr;
+            res.push((chunks[counter].clone(), widget_info.clone()));
+        }
+
+        for (cntr, layout_info) in layouts_info.iter() {
+            let counter = *cntr;
+            let place = Some(chunks[counter].clone());
+            let parent = layout_info.parent_node.clone().unwrap();
+            let parent = parent.as_ref().borrow();
+            let border_value = extract_attribute(parent.attributes.clone(), "border");
+            let margin = if border_value.eq("none") {
+                None
+            } else {
+                Some(1)
+            };
+            let partial_res = self.process_node(frame_size, &layout_info, place, margin);
+            for pair in partial_res.iter() {
+                res.push((pair.0, pair.1.clone()));
+            }
+        }
+        res
+    }
+
+    fn process_node(
+        &self,
+        frame_size: Rect,
+        node: &MarkupElement,
+        place: Option<Rect>,
+        margin: Option<u16>,
+    ) -> Vec<(Rect, MarkupElement)> {
+        let name = node.name.clone();
+        let name = name.as_str();
+        let values: Vec<(Rect, MarkupElement)> = match name {
+            "layout" => self.process_layout(frame_size, node, place, margin),
+            _ => {
+                panic!("Invalid node type \"{}\"", name);
+            }
+        };
+
+        return values;
     }
 
     fn draw_element<B: Backend>(&self, frame: &mut Frame<B>, area: Rect, node: &MarkupElement) {
@@ -255,114 +197,27 @@ impl MarkupParser {
         };
     }
 
-    fn process_layout<B: Backend>(
+    pub fn render_ui<B: Backend>(
         &self,
         frame: &mut Frame<B>,
-        node: &MarkupElement,
-        place: Option<Rect>,
-        margin: Option<u16>,
-    ) -> Vec<(Rect, MarkupElement)> {
-        let direction = MarkupParser::get_direction(node);
-        let mut res: Vec<(Rect, MarkupElement)> = vec![];
-        let mut constraints: Vec<Constraint> = vec![];
-        let mut widgets_info: Vec<(usize, MarkupElement)> = vec![];
-        let mut layouts_info: Vec<(usize, MarkupElement)> = vec![];
-        for (position, child) in node.children.iter().enumerate() {
-            let borrowed_child = child.as_ref().borrow();
-            if borrowed_child.name.eq("container") {
-                let constraint = extract_attribute(borrowed_child.attributes.clone(), "constraint");
-                constraints.push(MarkupParser::get_constraint(constraint));
-                let children = borrowed_child.children.clone();
-                children
-                    .iter()
-                    .map(|child| child.as_ref().borrow())
-                    .for_each(|child| {
-                        let child_name = child.name.as_str();
-                        if MarkupParser::is_widget(child_name) {
-                            let son = child.clone();
-                            if son.children.len() > 0 {
-                                let son = son.children[0].clone();
-                                let son = son.as_ref();
-                                let son = son.borrow();
-                                let son_name = son.name.as_str();
-                                if son_name.eq("layout") {
-                                    layouts_info.push((position, son.clone()));
-                                    widgets_info.push((position, child.clone()));
-                                } else {
-                                    widgets_info.push((position, child.clone()));
-                                }
-                            } else {
-                                widgets_info.push((position, child.clone()));
-                            }
-                        } else if MarkupParser::is_layout(child_name) {
-                            let partial_res = self.process_node(frame, node, None, None);
-                            for pair in partial_res.iter() {
-                                res.push((pair.0, pair.1.clone()));
-                            }
-                        }
-                    })
-            }
-        }
-
-        let layout = Layout::default()
-            .direction(direction)
-            .margin(margin.unwrap_or(0))
-            .constraints(constraints.clone().as_ref());
-
-        let chunks = layout.split(place.unwrap_or(frame.size()));
-
-        for (cntr, widget_info) in widgets_info.iter() {
-            let counter = *cntr;
-            res.push((chunks[counter].clone(), widget_info.clone()));
-        }
-
-        for (cntr, layout_info) in layouts_info.iter() {
-            let counter = *cntr;
-            let place = Some(chunks[counter].clone());
-            let parent = layout_info.parent_node.clone().unwrap();
-            let parent = parent.as_ref().borrow();
-            let border_value = extract_attribute(parent.attributes.clone(), "border");
-            let margin = if border_value.eq("none") {
-                None
-            } else {
-                Some(1)
-            };
-            let partial_res = self.process_node(frame, &layout_info, place, margin);
-            for pair in partial_res.iter() {
-                res.push((pair.0, pair.1.clone()));
-            }
-        }
-        res
-    }
-
-    fn process_node<B: Backend>(
-        &self,
-        frame: &mut Frame<B>,
-        node: &MarkupElement,
-        place: Option<Rect>,
-        margin: Option<u16>,
-    ) -> Vec<(Rect, MarkupElement)> {
-        let name = node.name.clone();
-        let name = name.as_str();
-        let values: Vec<(Rect, MarkupElement)> = match name {
-            "layout" => self.process_layout(frame.borrow_mut(), node, place, margin),
-            _ => {
-                panic!("Invalid node type \"{}\"", name);
-            }
-        };
-
-        return values;
-    }
-
-    pub fn render_ui<B: Backend>(&self, frame: &mut Frame<B>) {
+        render_actions: Option<RenderActions<B>>,
+    ) {
         let root = MarkupParser::get_element(self.root.clone());
-        // let prnt = MarkupParser::get_element(self.root.clone());
-        // print!("{}", prnt);
-        let drawables = self.process_node(frame.borrow_mut(), &root, None, None);
+        let drawables = self.process_node(frame.size(), &root, None, None);
+
+        let draw_functions = render_actions.unwrap_or(RenderActions::new());
+        let draw_functions = draw_functions.get_storage();
+
         drawables.iter().for_each(|pair| {
             let area = pair.0;
             let node = pair.1.clone();
-            self.draw_element(frame, area, &node);
+            let node_name = node.name.as_str();
+            if draw_functions.contains_key(node_name) {
+                let fnc = draw_functions.get(node_name).unwrap();
+                fnc(&node, area, frame);
+            } else {
+                self.draw_element(frame, area, &node);
+            }
         });
     }
 
@@ -445,5 +300,61 @@ impl MarkupParser {
             error: None,
             root: root_node.clone(),
         }
+    }
+
+    pub fn ui_loop(self: &Self) -> Result<(), Box<dyn std::error::Error>> {
+        enable_raw_mode().expect("Can't run in raw mode.");
+        let stdout = io::stdout();
+        let backend = CrosstermBackend::new(stdout);
+        let mut terminal = Terminal::new(backend)?;
+        terminal.clear()?;
+
+        let (tx, rx) = mpsc::channel::<Event<KeyEvent>>();
+        let tick_rate = Duration::from_millis(200);
+
+        thread::spawn(move || {
+            let mut last_tick = Instant::now();
+            loop {
+                let timeout = tick_rate
+                    .checked_sub(last_tick.elapsed())
+                    .unwrap_or_else(|| Duration::from_secs(0));
+
+                if event::poll(timeout).expect("poll works") {
+                    if let CEvent::Key(key) = event::read().expect("can read events") {
+                        tx.send(Event::Input(key)).expect("can send events");
+                    }
+                }
+
+                if last_tick.elapsed() >= tick_rate {
+                    if let Ok(_) = tx.send(Event::Tick) {
+                        last_tick = Instant::now();
+                    }
+                }
+            }
+        });
+
+        loop {
+            let mut last_pressed = '\n';
+            terminal.draw(|frame| {
+                self.render_ui(frame, None);
+            })?;
+            match rx.recv()? {
+                Event::Input(event) => match event.code {
+                    KeyCode::Char('q') => {
+                        last_pressed = 'q';
+                    }
+                    _ => {}
+                },
+                _ => {}
+            }
+            if last_pressed == 'q' {
+                break;
+            }
+        }
+
+        disable_raw_mode()?;
+        terminal.clear()?;
+        terminal.show_cursor()?;
+        Ok(())
     }
 }
