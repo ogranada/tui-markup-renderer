@@ -23,7 +23,7 @@ use tui::{
 };
 
 use crossterm::{
-    event::{self, Event as CEvent, KeyCode, KeyEvent},
+    event::{self, Event as CEvent, KeyEvent},
     terminal::{disable_raw_mode, enable_raw_mode},
 };
 use std::io;
@@ -32,10 +32,12 @@ use std::thread;
 use std::time::{Duration, Instant};
 use tui::{backend::CrosstermBackend, Terminal};
 
-enum Event<I> {
+pub enum Event<I> {
     Input(I),
     Tick,
 }
+
+type TCallback = fn(KeyEvent) -> bool;
 
 /*
 #[cfg(not(test))]
@@ -302,7 +304,12 @@ impl MarkupParser {
         }
     }
 
-    pub fn ui_loop(self: &Self) -> Result<(), Box<dyn std::error::Error>> {
+    /// Starts a render loop. the loop receive a callback thar will return true
+    /// if the loop must finish.
+    ///
+    /// - *on_event*: callback thar receive a key event.
+    ///
+    pub fn ui_loop(self: &Self, on_event: TCallback) -> Result<(), Box<dyn std::error::Error>> {
         enable_raw_mode().expect("Can't run in raw mode.");
         let stdout = io::stdout();
         let backend = CrosstermBackend::new(stdout);
@@ -334,10 +341,18 @@ impl MarkupParser {
         });
 
         loop {
-            let mut last_pressed = '\n';
+            // let mut last_pressed = '\n';
             terminal.draw(|frame| {
                 self.render_ui(frame, None);
             })?;
+            let evt: Event<KeyEvent> = rx.recv()?;
+            if let Event::Input(key_code) = evt {
+                let should_quit = on_event(key_code);
+                if should_quit {
+                    break;
+                }
+            }
+            /*
             match rx.recv()? {
                 Event::Input(event) => match event.code {
                     KeyCode::Char('q') => {
@@ -350,6 +365,7 @@ impl MarkupParser {
             if last_pressed == 'q' {
                 break;
             }
+            */
         }
 
         disable_raw_mode()?;

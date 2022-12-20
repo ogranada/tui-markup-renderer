@@ -66,10 +66,40 @@ generates:
 
 ![Tux, the Linux mascot](./samples/tui-markup-sample/layout.png)
 
+
+## How to use it
+
+You can use it as in the next piece of code:
+
+```rust
+use crossterm::event::{KeyCode, KeyModifiers, KeyEvent};
+use tui_markup_renderer::parser::MarkupParser;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mp = MarkupParser::new(String::from("./assets/layout.tml"));
+
+    mp.ui_loop(|key_event: KeyEvent| {
+        let res = match key_event {
+            KeyEvent {
+              modifiers: KeyModifiers::CONTROL,
+              code: KeyCode::Char('q'),
+              ..
+            } => true,
+            _ => false,
+        };
+        res
+    })?;
+
+    Ok(())
+}
+
+```
+
 ## Planned features
 
 * Add documentation to use it.
-* Add render loop to simplify the code.
+* Improce render loop to simplify the code.
 * Add events to widgets.
 * Runtime template change.
+* Add state management to enable/disable UI features.
 
