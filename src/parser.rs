@@ -27,7 +27,10 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode},
 };
 use std::io;
-use std::sync::mpsc;
+use std::sync::mpsc::{
+    self,
+    // Sender,
+};
 use std::thread;
 use std::time::{Duration, Instant};
 use tui::{backend::CrosstermBackend, Terminal};
@@ -304,6 +307,46 @@ impl MarkupParser {
         }
     }
 
+    pub fn find_by_id(self: &Self, id: String) -> Option<MarkupElement> {
+        self.find_by_attr("id", id, None)
+    }
+
+    pub fn find_by_attribute(self: &Self, attr: &str, value: String) -> Option<MarkupElement> {
+        self.find_by_attr(attr, value, None)
+    }
+
+    pub fn find_by_attr(
+        self: &Self,
+        attr: &str,
+        value: String,
+        parent: Option<Rc<RefCell<MarkupElement>>>,
+    ) -> Option<MarkupElement> {
+        let root_node = if parent.is_some() {
+            parent
+        } else {
+            self.root.clone()
+        };
+        if root_node.is_some() {
+            let r = MarkupParser::get_element(root_node.clone());
+            if r.attributes.contains_key(attr.clone())
+                && r.attributes
+                    .get(attr.clone())
+                    .unwrap_or(&String::from("<>"))
+                    .eq(value.as_str())
+            {
+                println!("Found {}", r.clone());
+                return Some(r.clone());
+            }
+            for chld in r.children {
+                let child = self.find_by_attr(attr.clone(), value.clone(), Some(chld.clone()));
+                if child.is_some() {
+                    return child.clone();
+                }
+            }
+        }
+        None
+    }
+
     /// Starts a render loop. the loop receive a callback thar will return true
     /// if the loop must finish.
     ///
@@ -316,7 +359,7 @@ impl MarkupParser {
         let mut terminal = Terminal::new(backend)?;
         terminal.clear()?;
 
-        let (tx, rx) = mpsc::channel::<Event<KeyEvent>>();
+        let (sender, receiver) = mpsc::channel::<Event<KeyEvent>>();
         let tick_rate = Duration::from_millis(200);
 
         thread::spawn(move || {
@@ -328,12 +371,12 @@ impl MarkupParser {
 
                 if event::poll(timeout).expect("poll works") {
                     if let CEvent::Key(key) = event::read().expect("can read events") {
-                        tx.send(Event::Input(key)).expect("can send events");
+                        sender.send(Event::Input(key)).expect("can send events");
                     }
                 }
 
                 if last_tick.elapsed() >= tick_rate {
-                    if let Ok(_) = tx.send(Event::Tick) {
+                    if let Ok(_) = sender.send(Event::Tick) {
                         last_tick = Instant::now();
                     }
                 }
@@ -345,27 +388,13 @@ impl MarkupParser {
             terminal.draw(|frame| {
                 self.render_ui(frame, None);
             })?;
-            let evt: Event<KeyEvent> = rx.recv()?;
+            let evt: Event<KeyEvent> = receiver.recv()?;
             if let Event::Input(key_code) = evt {
                 let should_quit = on_event(key_code);
                 if should_quit {
                     break;
                 }
             }
-            /*
-            match rx.recv()? {
-                Event::Input(event) => match event.code {
-                    KeyCode::Char('q') => {
-                        last_pressed = 'q';
-                    }
-                    _ => {}
-                },
-                _ => {}
-            }
-            if last_pressed == 'q' {
-                break;
-            }
-            */
         }
 
         disable_raw_mode()?;

@@ -258,4 +258,23 @@ mod markup_parser {
 
         Ok(())
     }
+
+    #[test]
+    fn test_loop() -> Result<(), Box<dyn Error>> {
+        let filepath = match current_dir() {
+            Ok(exe_path) => format!("{}/tests/assets/sample_widgets_1.tml", exe_path.display()),
+            Err(_e) => format!(""),
+        };
+        let mp = MarkupParser::new(filepath.clone());
+
+        let backend = TestBackend::new(20, 10);
+        let mut terminal = Terminal::new(backend)?;
+        terminal.draw(|f| {
+            mp.render_ui(f, None);
+        })?;
+
+
+        Ok(())
+    }
+
 }
