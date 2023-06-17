@@ -1,7 +1,6 @@
 <layout id="root" direction="vertical">
   <container constraint="100%">
     <block title="BTitle" border="all">
-
     </block>
   </container>
 </layout>

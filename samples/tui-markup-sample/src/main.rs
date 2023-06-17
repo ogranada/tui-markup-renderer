@@ -6,7 +6,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 use std::{borrow::BorrowMut, io};
-use tui_markup::parser::MarkupParser;
+use tui_markup_renderer::markup_parser::MarkupParser;
 
 use tui::{backend::CrosstermBackend, Terminal};
 
@@ -49,12 +49,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let mp = MarkupParser::new(String::from("./assets/layout.tml"));
+    let mp = MarkupParser::new(String::from("./assets/layout.tml"), None);
 
     loop {
         let mut last_pressed = '\n';
         terminal.draw(|frame| {
-            _mp.render_ui(frame.borrow_mut());
+            mp.render_ui(frame.borrow_mut());
         })?;
         match rx.recv()? {
             Event::Input(event) => match event.code {

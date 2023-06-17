@@ -1,13 +1,5 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::fmt;
-use std::rc::Rc;
-
-#[derive(Debug, Clone)]
-pub struct MarkupAttribute {
-    pub name: String,
-    pub value: String,
-}
+use core::fmt;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 #[derive(Debug)]
 pub struct MarkupElement {
