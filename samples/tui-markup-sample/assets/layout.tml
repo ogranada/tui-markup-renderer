@@ -1,21 +1,49 @@
 <layout id="root" direction="vertical">
+  <styles>
+
+    button {
+      fg: red;
+      bg: black;
+    }
+
+    button:focus {
+      fg: white;
+      bg: red;
+    }
+    #footer {
+      bg:black;
+      fg:blue;
+    }
+  </styles>
   <container id="nav_container" constraint="5">
     <p id="toolbar" title="Actions" border="all" styles="fg:green">
-      This is a sample
+      Header sample
     </p>
   </container>
   <container id="body_container" constraint="10min">
     <block id="body_block" border="none">
       
       <layout id="content_info" direction="horizontal">
-        <container id="ats_container" constraint="20%">
-          <block id="ats_block" title="Ats" border="all">
-      
-          </block>
+        <container id="ats_container" constraint="20%" title="Ats" border="all">
+
+          <layout id="vert_info" direction="vertical">
+            <block id="ats_block" constraint="5">
+              <button id="btn_hello" action="do_something" index="1" styles="fg:magenta" focus_styles="fg:white;bg:magenta"> Hello </button> 
+            </block>
+            <block id="bts_block" constraint="5">
+              <button id="btn_hello_2" action="do_something_else" index="3"> Simple </button> 
+            </block>
+            <block id="bts_block" constraint="5">
+              <button id="btn_hello_3" action="do_something_else" index="2"> World </button> 
+            </block>
+          </layout>
+
         </container>
         <container id="cnt_container" constraint="20min">
           <block id="cnt_block" title="Cnt" border="all">
-            
+            <p>
+              lorem ipsum dolor sit amet sample.
+            </p>
           </block>
         </container>
       </layout>
@@ -23,8 +51,22 @@
     </block>
   </container>
   <container id="nav_container" constraint="5">
-    <p id="footer" border="all" styles="bg:red;fg:black">
-      This is a sample
+    <p id="footer" border="all">
+      Footer sample
     </p>
   </container>
+  <dialog id="dlg1" show="showQuitDialog" buttons="Yes|Cancel" action="on_dialog_event">
+    <layout direction="vertical">
+      <container constraint="3">
+        <p align="center" styles="weight:bold">
+          Close Application
+        </p>
+      </container>
+      <container>
+        <p align="center">
+          Do you want to close the application?
+        </p>
+      </container>
+    </layout>
+  </dialog>
 </layout>

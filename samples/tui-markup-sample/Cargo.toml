@@ -9,4 +9,6 @@ edition = "2021"
 
 tui = "0.19.0"
 tui-markup-renderer = { path = "../../../tui-markup-renderer/" }
-crossterm = "0.24.0"
+crossterm = "0.25.0"
+clap = { version = "4.3.5", features = ["derive"] }
+env_logger = "0.10.0"

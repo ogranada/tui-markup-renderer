@@ -1,0 +1,24 @@
+<layout id="root" direction="horizontal">
+  <block id="side_panel_1" title="Side" constraint="20%" border="all">
+    <p>
+      side
+    </p>
+  </block>
+    <layout id="content" direction="vertical" constraint="60%">
+      <block id="header_container" title="Sample" constraint="10max" border="all" styles="fg:green">
+        <p>
+          Header
+        </p>
+      </block>
+      <block id="body_container" title="Body" border="all" styles="fg:cyan">
+        <p>
+          More...
+        </p>
+      </block>
+    </layout>
+  <block id="side_panel_2" title="Tools" constraint="20%" border="all" styles="bg:black;fg:magenta">
+    <p>
+      more
+    </p>
+  </block>
+</layout>

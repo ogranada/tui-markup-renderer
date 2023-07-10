@@ -1,0 +1,12 @@
+<layout id="root" direction="vertical">
+  <block id="header_container" title="Sample" constraint="10max" border="all">
+    <p>
+      Header
+    </p>
+  </block>
+  <block id="body_container" title="Body" border="all">
+    <p>
+      More...
+    </p>
+  </block>
+</layout>

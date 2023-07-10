@@ -25,7 +25,7 @@ Sample markup code:
 
 generates:
 
-![Tux, the Linux mascot](./samples/tui-markup-sample/simple_layout.png)
+![Simple Layout](./samples/tui-markup-sample/simple_layout.png)
 
 ### A more complex sample:
 
@@ -64,7 +64,7 @@ generates:
 
 generates:
 
-![Tux, the Linux mascot](./samples/tui-markup-sample/layout.png)
+![Sample Layout](./samples/tui-markup-sample/layout.png)
 
 ## Planned features
 
@@ -72,4 +72,15 @@ generates:
 * Add render loop to simplify the code.
 * Add events to widgets.
 * Runtime template change.
+
+## The Rules!
+
+* A layout allow dev to define the direction flow.
+* A block is a panel can have:
+  - borders
+  - title
+  - constarint to define size of the element.
+* A blocks can be parent of a layout.
+* A container is a alias of a block.
+* A layout must contains blocks/containers as children in order to set user interfaces.
 

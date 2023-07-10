@@ -1,0 +1,4 @@
+<layout id="root" direction="vertical">
+    <layout id="a" direction="horizontal">
+    </layout>
+</layout>

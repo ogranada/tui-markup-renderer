@@ -1,25 +1,29 @@
-use core::fmt;
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{fmt, cell::RefCell, collections::HashMap, rc::Rc};
 
-#[derive(Debug)]
 pub struct MarkupElement {
     pub deep: usize,
+    pub id: String,
     pub name: String,
-    pub text: String,
+    pub order: i32,
+    pub text: Option<String>,
     pub attributes: HashMap<String, String>,
     pub children: Vec<Rc<RefCell<MarkupElement>>>,
     pub parent_node: Option<Rc<RefCell<MarkupElement>>>,
+    pub dependencies: Vec<String>,
 }
 
 impl Clone for MarkupElement {
     fn clone(&self) -> Self {
         MarkupElement {
             deep: self.deep,
+            id: self.id.clone(),
             name: self.name.clone(),
             text: self.text.clone(),
+            order: self.order.clone(),
             attributes: self.attributes.clone(),
             children: self.children.clone(),
             parent_node: self.parent_node.clone(),
+            dependencies: self.dependencies.clone(),
         }
     }
 }
@@ -49,3 +53,22 @@ impl fmt::Display for MarkupElement {
         fmt::Display::fmt(&new_str, f)
     }
 }
+
+impl fmt::Debug for MarkupElement {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut r = f.debug_struct("MarkupElement");
+        r.field("id", &self.id);
+        r.field("name", &self.name);
+        r.field("text", &self.text);
+        if self.order != -1 {
+            r.field("order", &self.order);
+        }
+        r.field("attributes", &self.attributes);
+        r.field("dependencies", &self.dependencies);
+        /*
+        r.field("children", &self.children);
+        // */
+        r.finish()
+    }
+}
+

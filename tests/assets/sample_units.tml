@@ -1,38 +1,35 @@
 <layout id="root" direction="vertical">
   <container id="nav_container" constraint="4">
     <block id="nav_title" title="Nav" border="all">
-
     </block>
   </container>
-  <container id="body_container" constraint="60%">
-    <block id="body_block" border="none">
-      
-      <layout id="content_info" direction="horizontal">
-        <container id="ats_container" constraint="5max">
-          <block id="ats_block" title="Ats" border="all">
-      
+  <container id="body_container" constraint="70%">
+    <layout id="content_info" direction="horizontal">
+      <block id="ats_block" title="Ats" border="all" constraint="5max">
+      </block>
+      <block id="cnt_block" title="Cnt" border="all" constraint="5max">
+        <layout id="inner_info" direction="horizontal">
+          <block id="inner_block" title="Inn" border="all" constraint="5">
           </block>
-        </container>
-        <container id="cnt_container" constraint="60%">
-          <block id="cnt_block" title="Cnt" border="all">
-            
+          <block id="cnt_block" title="More" border="all" constraint="2">
+          </block>
+        </layout>
+      </block>
+    </layout>
+    <!--
+      <layout id="content_info" direction="horizontal">
+          <block id="ats_block" title="Ats" border="all" constraint="5max">
+          </block>
+          <block id="cnt_block" title="Cnt" border="all" constraint="60%">
             <layout id="inner_info" direction="horizontal">
-              <container id="inner_container" constraint="5">
-                <block id="inner_block" title="Inn" border="all">
-            
+                <block id="inner_block" title="Inn" border="all" constraint="5">
                 </block>
-              </container>
-              <container id="cnt_container" constraint="2">
-                <block id="cnt_block" title="More" border="all">
-                  
+                <block id="cnt_block" title="More" border="all" constraint="2">
                 </block>
-              </container>
             </layout>
 
           </block>
-        </container>
       </layout>
-
-    </block>
+    -->
   </container>
 </layout>

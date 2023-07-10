@@ -1,0 +1,19 @@
+<layout id="root" direction="horizontal">
+  <block id="header_container" title="Sample" constraint="20%" border="all">
+    <p border="all">
+      side
+    </p>
+  </block>
+  <layout id="other" direction="vertical">
+    <block id="header_container" title="Sample" constraint="10max" border="all">
+      <p>
+        Header
+      </p>
+    </block>
+    <block id="body_container" title="Body" border="all">
+      <p>
+        More...
+      </p>
+    </block>
+  </layout>
+</layout>

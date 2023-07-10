@@ -16,7 +16,7 @@ mod markup_parser {
             Ok(exe_path) => format!("{}/tests/assets/creation_sample.tml", exe_path.display()),
             Err(_e) => format!(""),
         };
-        let mp = MarkupParser::<TestBackend>::new(filepath.clone(), None);
+        let mp = MarkupParser::<TestBackend>::new(filepath.clone(), None, None);
         assert_eq!(mp.path, filepath);
         Ok(())
     }
@@ -27,7 +27,7 @@ mod markup_parser {
             Ok(exe_path) => format!("{}/tests/assets/bad_sample.tml", exe_path.display()),
             Err(_e) => format!(""),
         };
-        let mp = MarkupParser::<TestBackend>::new(filepath.clone(), None);
+        let mp = MarkupParser::<TestBackend>::new(filepath.clone(), None, None);
         assert!(mp.failed);
         assert!(mp.error.is_some());
         assert_eq!(mp.error.unwrap(), "Unexpected closing tag: header != title");
@@ -40,7 +40,7 @@ mod markup_parser {
             Ok(exe_path) => format!("{}/tests/assets/real_sample.tml", exe_path.display()),
             Err(_e) => format!(""),
         };
-        let mp = MarkupParser::<TestBackend>::new(filepath.clone(), None);
+        let mp = MarkupParser::<TestBackend>::new(filepath.clone(), None, None);
         assert!(!mp.failed);
         assert!(mp.error.is_none());
         let root = MarkupParser::<TestBackend>::get_element(mp.root.clone());
@@ -68,7 +68,7 @@ mod markup_parser {
             f.render_widget(block, area);
         });
 
-        let mp = MarkupParser::new(filepath.clone(), Some(store));
+        let mp = MarkupParser::new(filepath.clone(), Some(store), None);
 
         let mut terminal = Terminal::new(backend)?;
         terminal.draw(|f| {
@@ -95,7 +95,7 @@ mod markup_parser {
             ),
             Err(_e) => format!(""),
         };
-        let mp = MarkupParser::new(filepath.clone(), None);
+        let mp = MarkupParser::new(filepath.clone(), None, None);
 
         let backend = TestBackend::new(10, 10);
         let mut terminal = Terminal::new(backend)?;
@@ -129,7 +129,7 @@ mod markup_parser {
             Ok(exe_path) => format!("{}/tests/assets/sample_units.tml", exe_path.display()),
             Err(_e) => format!(""),
         };
-        let mp = MarkupParser::new(filepath.clone(), None);
+        let mp = MarkupParser::new(filepath.clone(), None, None);
 
         let backend = TestBackend::new(20, 10);
         let mut terminal = Terminal::new(backend)?;
@@ -163,7 +163,7 @@ mod markup_parser {
             ),
             Err(_e) => format!(""),
         };
-        let mp = MarkupParser::new(filepath.clone(), None);
+        let mp = MarkupParser::new(filepath.clone(), None, None);
 
         let backend = TestBackend::new(20, 10);
         let mut terminal = Terminal::new(backend)?;
@@ -197,7 +197,7 @@ mod markup_parser {
             Ok(exe_path) => format!("{}/tests/assets/sample_widgets_1.tml", exe_path.display()),
             Err(_e) => format!(""),
         };
-        let mp = MarkupParser::new(filepath.clone(), None);
+        let mp = MarkupParser::new(filepath.clone(), None, None);
 
         let backend = TestBackend::new(20, 10);
         let mut terminal = Terminal::new(backend)?;
