@@ -69,8 +69,6 @@ generates:
 ## Planned features
 
 * Add documentation to use it.
-* Add render loop to simplify the code.
-* Add events to widgets.
 * Runtime template change.
 
 ## The Rules!
@@ -83,4 +81,215 @@ generates:
 * A blocks can be parent of a layout.
 * A container is a alias of a block.
 * A layout must contains blocks/containers as children in order to set user interfaces.
+
+
+## A Sample
+
+Layout code:
+
+Something better?
+
+```xml
+<layout id="root" direction="vertical">
+  <styles>
+
+    button {
+      fg: red;
+      bg: black;
+    }
+
+    button:focus {
+      fg: white;
+      bg: red;
+    }
+    #footer {
+      bg:black;
+      fg:blue;
+    }
+  </styles>
+  <container id="nav_container" constraint="5">
+    <p id="toolbar" title="Actions" border="all" styles="fg:green">
+      Header sample
+    </p>
+  </container>
+  <container id="body_container" constraint="10min">
+    <block id="body_block" border="none">
+
+      <layout id="content_info" direction="horizontal">
+        <container id="ats_container" constraint="20%" title="Ats" border="all">
+
+          <layout id="vert_info" direction="vertical">
+            <block id="ats_block" constraint="5">
+              <button id="btn_hello" action="do_something" index="1" styles="fg:magenta" focus_styles="fg:white;bg:magenta"> Hello </button>
+            </block>
+            <block id="bts_block" constraint="5">
+              <button id="btn_hello_2" action="do_something_else" index="3"> Simple </button>
+            </block>
+            <block id="bts_block" constraint="5">
+              <button id="btn_hello_3" action="do_something_else" index="2"> World </button>
+            </block>
+          </layout>
+
+        </container>
+        <container id="cnt_container" constraint="20min">
+          <block id="cnt_block" title="Cnt" border="all">
+            <p>
+              lorem ipsum dolor sit amet sample.
+            </p>
+          </block>
+        </container>
+      </layout>
+
+    </block>
+  </container>
+  <container id="nav_container" constraint="5">
+    <p id="footer" border="all">
+      Footer sample
+    </p>
+  </container>
+  <dialog id="dlg1" show="showQuitDialog" buttons="Yes|Cancel" action="on_dialog_event">
+    <layout direction="vertical">
+      <container constraint="3">
+        <p align="center" styles="weight:bold">
+          Close Application
+        </p>
+      </container>
+      <container>
+        <p align="center">
+          Do you want to close the application?
+        </p>
+      </container>
+    </layout>
+  </dialog>
+</layout>
+```
+
+Rust Code:
+
+```rust
+use clap::Parser;
+use crossterm::event::KeyCode::{Char, self};
+use std::{collections::HashMap, io};
+use tui::backend::CrosstermBackend;
+use tui_markup_renderer::{
+    markup_parser::MarkupParser,
+    event_response::EventResponse,
+};
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    #[arg(short, long, default_value_t = String::from("run"))]
+    execution_type: String,
+    #[arg(short, long, default_value_t = String::from("./assets/layout1.tml"))]
+    layout: String,
+    #[arg(short, long, default_value_t = false)]
+    print_args: bool,
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let Args {
+        layout,
+        execution_type,
+        print_args,
+    } = Args::parse();
+
+    let stdout = io::stdout();
+    let backend = CrosstermBackend::new(stdout);
+    let state = Some(HashMap::new());
+
+    let mut mp = MarkupParser::new(layout.clone(), None, state);
+    mp.add_action(
+        "do_something",
+        |_state: &mut HashMap<String, String>| {
+            println!("hello!!!");
+            EventResponse::NOOP
+        },
+    )
+    .add_action(
+        "do_something_else",
+        |_state: &mut HashMap<String, String>| {
+            println!("world!!!");
+            EventResponse::NOOP
+        },
+    )
+    .add_action(
+        "on_dlg1_btn_Yes",
+        |_state: &mut HashMap<String, String>| {
+            EventResponse::QUIT
+        },
+    )
+    .add_action(
+        "on_dlg1_btn_Cancel",
+        |state: &mut HashMap<String, String>| {
+            let key = "showQuitDialog".to_string();
+            state.insert(key, "false".to_string());
+            EventResponse::STATE(state.clone())
+        },
+    )
+    ;
+
+    if print_args {
+        println!(
+            "[layout: {}, execution_type: {}, print_args: {}]",
+            layout, execution_type, print_args
+        );
+    }
+
+    if execution_type == String::from("run") {
+        // async move
+        mp.ui_loop(backend, |key_event, state| {
+            let mut new_state = state.clone();
+            let key = "showQuitDialog".to_string();
+            // let back_value = String::new();
+            let mut pressed = '\n';
+            match key_event.code {
+                KeyCode::Esc => {
+                    pressed = '\r';
+                }
+                Char(character) => {
+                    pressed = character;
+                }
+                _ => {}
+            }
+
+            if pressed == '\r' {
+                let new_value = "false";
+                new_state.insert(
+                    key,
+                    new_value.to_string(),
+                );
+                return EventResponse::STATE(new_state);
+            }
+
+            if pressed == 'q' {
+                let new_value = "true";
+                new_state.insert(
+                    key,
+                    new_value.to_string(),
+                );
+                return EventResponse::STATE(new_state);
+            }
+
+            return EventResponse::NOOP;
+        })
+    } else {
+        env_logger::init();
+        mp.test_check(backend)
+    }
+}
+
+
+```
+
+Will generate this:
+
+<img width="1506" alt="image" src="https://github.com/ogranada/tui-markup-renderer/assets/1445677/bfce5cf3-d5f7-495a-b4fc-aa4a8c1fd0f5">
+
+<img width="1510" alt="image" src="https://github.com/ogranada/tui-markup-renderer/assets/1445677/59beb3bd-ec2b-4008-9bf7-d876e3c27df6">
+
+<img width="1506" alt="image" src="https://github.com/ogranada/tui-markup-renderer/assets/1445677/cd987ed8-3001-4470-94eb-ac2e2d5dcebc">
+
+
+
 
