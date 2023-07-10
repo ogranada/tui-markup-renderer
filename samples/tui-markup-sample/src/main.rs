@@ -1,77 +1,114 @@
-use crossterm::{
-    event::{self, Event as CEvent, KeyCode, KeyEvent},
-    terminal::{disable_raw_mode, enable_raw_mode},
+use clap::Parser;
+use crossterm::event::KeyCode::{Char, self};
+use std::{collections::HashMap, io};
+use tui::backend::CrosstermBackend;
+use tui_markup_renderer::{
+    markup_parser::MarkupParser,
+    event_response::EventResponse,
 };
-use std::sync::mpsc;
-use std::thread;
-use std::time::{Duration, Instant};
-use std::{borrow::BorrowMut, io};
-use tui_markup_renderer::markup_parser::MarkupParser;
 
-use tui::{backend::CrosstermBackend, Terminal};
-
-enum Event<I> {
-    Input(I),
-    Tick,
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    #[arg(short, long, default_value_t = String::from("run"))]
+    execution_type: String,
+    #[arg(short, long, default_value_t = String::from("./assets/layout1.tml"))]
+    layout: String,
+    #[arg(short, long, default_value_t = false)]
+    print_args: bool,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // parse_args();
-    enable_raw_mode().expect("Can't run in raw mode.");
+    let Args {
+        layout,
+        execution_type,
+        print_args,
+    } = Args::parse();
 
     let stdout = io::stdout();
-    // execute!(stdout, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-    terminal.clear()?;
+    let state = Some(HashMap::new());
 
-    let (tx, rx) = mpsc::channel::<Event<KeyEvent>>();
-    let tick_rate = Duration::from_millis(200);
+    let mut mp = MarkupParser::new(layout.clone(), None, state);
+    mp.add_action(
+        "do_something",
+        |_state: &mut HashMap<String, String>| {
+            println!("hello!!!");
+            EventResponse::NOOP
+        },
+    )
+    .add_action(
+        "do_something_else",
+        |_state: &mut HashMap<String, String>| {
+            println!("world!!!");
+            EventResponse::NOOP
+        },
+    )
+    .add_action(
+        "on_dlg1_btn_Yes",
+        |_state: &mut HashMap<String, String>| {
+            EventResponse::QUIT
+        },
+    )
+    .add_action(
+        "on_dlg1_btn_Cancel",
+        |state: &mut HashMap<String, String>| {
+            let key = "showQuitDialog".to_string();
+            state.insert(key, "false".to_string());
+            EventResponse::STATE(state.clone())
+        },
+    )
+    ;
 
-    thread::spawn(move || {
-        let mut last_tick = Instant::now();
-        loop {
-            let timeout = tick_rate
-                .checked_sub(last_tick.elapsed())
-                .unwrap_or_else(|| Duration::from_secs(0));
-
-            if event::poll(timeout).expect("poll works") {
-                if let CEvent::Key(key) = event::read().expect("can read events") {
-                    tx.send(Event::Input(key)).expect("can send events");
-                }
-            }
-
-            if last_tick.elapsed() >= tick_rate {
-                if let Ok(_) = tx.send(Event::Tick) {
-                    last_tick = Instant::now();
-                }
-            }
-        }
-    });
-
-    let mp = MarkupParser::new(String::from("./assets/layout.tml"), None);
-
-    loop {
-        let mut last_pressed = '\n';
-        terminal.draw(|frame| {
-            mp.render_ui(frame.borrow_mut());
-        })?;
-        match rx.recv()? {
-            Event::Input(event) => match event.code {
-                KeyCode::Char('q') => {
-                    last_pressed = 'q';
-                }
-                _ => {}
-            },
-            _ => {}
-        }
-        if last_pressed == 'q' {
-            break;
-        }
+    if print_args {
+        println!(
+            "[layout: {}, execution_type: {}, print_args: {}]",
+            layout, execution_type, print_args
+        );
     }
 
-    disable_raw_mode()?;
-    terminal.clear()?;
-    terminal.show_cursor()?;
-    Ok(())
+    if execution_type == String::from("run") {
+        // async move
+        mp.ui_loop(backend, |key_event, state| {
+            let mut new_state = state.clone();
+            let key = "showQuitDialog".to_string();
+            // let back_value = String::new();
+            let mut pressed = '\n';
+            match key_event.code {
+                KeyCode::Esc => {
+                    pressed = '\r';
+                }
+                Char(character) => {
+                    pressed = character;
+                }
+                _ => {}
+            }
+
+            if pressed == '\r' {
+                let new_value = "false";
+                new_state.insert(
+                    key,
+                    new_value.to_string(),
+                );
+                return EventResponse::STATE(new_state);
+            }
+
+            if pressed == 'q' {
+                let new_value = "true";
+                new_state.insert(
+                    key,
+                    new_value.to_string(),
+                );
+                return EventResponse::STATE(new_state);
+            }
+
+            // if pressed == 'p' {
+            //     return EventResponse::QUIT;
+            // }
+            return EventResponse::NOOP;
+        })
+    } else {
+        env_logger::init();
+        mp.test_check(backend)
+    }
 }

@@ -1,0 +1,51 @@
+<layout id="root" direction="vertical">
+  <container id="nav_container" constraint="5">
+    <layout id="a" direction="horizontal">
+      <container id="header_container" constraint="100%" title="Header" border="all">
+        <p>
+          Header
+        </p>
+      </container>
+    </layout>
+  </container>
+  <container id="body_container" constraint="10min">
+    <layout id="b" direction="horizontal">
+      <container id="aside_container" constraint="20%" title="Aside" border="all">
+        <layout id="layout_aside" direction="vertical">
+          <container id="header_container" constraint="100%" title="Header" border="all">
+            <p>
+              Element a
+            </p>
+            <p>
+              b
+            </p>
+            <!--
+            <p>
+              Element 3
+            </p>
+            -->
+          </container>
+          <container id="header_container" constraint="100%" title="Header" border="all">
+            <p>
+              Element 2
+            </p>
+          </container>
+        </layout>
+      </container>
+      <container id="content_container" constraint="20%" title="Content" border="all">
+        <p>
+          this is just a sample test. all can be changed suddenly because this is just a test.
+        </p>
+      </container>
+    </layout>
+  </container>
+  <container id="footer_container" constraint="5">
+    <layout id="c" direction="horizontal">
+      <container id="header_container" constraint="100%" title="Footer" border="all">
+        <p>
+          Copy ø Oscar Granada
+        </p>
+      </container>
+    </layout>
+  </container>
+</layout>

@@ -1,8 +1,15 @@
 <layout id="root" direction="vertical">
   <container id="nav_container" constraint="5">
-    <p id="toolbar" title="Navigation" border="all" styles="fg:green">
-      This is the navigation
-    </p>
+    <layout direction="horizontal">
+      <block constraint="50%">
+        <p id="toolbar" title="Navigation" border="all" styles="fg:green">
+          This is the navigation
+        </p>
+      </block>
+      <block constraint="50%" styles="fg:magenta" padding="1">
+        <button>click me!</button>
+      </block>
+    </layout>
   </container>
   <container id="body_container" constraint="10min">
     <p id="body" title="Body" border="all" styles="fg:red">

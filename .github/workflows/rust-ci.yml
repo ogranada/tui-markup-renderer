@@ -1,0 +1,22 @@
+name: TU Markup Renderer CI
+
+on:
+  push:
+    branches:
+      - main
+    pull_requests:
+      branches:
+        - main
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set Up Rust
+        uses: actions/checkout@v2
+      - build: Build library
+        run: cargo build --verbose
+      - test: Run tests
+        run: cargo test
+
+

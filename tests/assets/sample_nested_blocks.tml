@@ -4,22 +4,16 @@
 
     </block>
   </container>
-  <container id="body_container" constraint="70%">
-    <block id="body_block" title="Body" border="all">
+    <block id="body_block" title="Body" border="all" constraint="70%">
       
       <layout id="content_info" direction="horizontal">
-        <container id="ats_container" constraint="30%">
-          <block id="ats_block" title="Ats" border="all">
+          <block id="ats_block" title="Ats" border="all" constraint="30%">
       
           </block>
-        </container>
-        <container id="cnt_container" constraint="70%">
-          <block id="cnt_block" title="Cnt" border="all">
+          <block id="cnt_block" title="Cnt" border="all" constraint="70%">
             
           </block>
-        </container>
       </layout>
 
     </block>
-  </container>
 </layout>

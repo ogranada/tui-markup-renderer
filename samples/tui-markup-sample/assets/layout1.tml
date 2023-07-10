@@ -1,0 +1,9 @@
+<layout id="root" direction="vertical">
+  <layout id="a" direction="horizontal">
+    <block id="header_container" constraint="100%" title="Header" border="all">
+      <p border="all">
+        Header
+      </p>
+    </block>
+  </layout>
+</layout>
