@@ -1,4 +1,4 @@
-name: TU Markup Renderer CI
+name: TUI Markup Renderer CI
 
 on:
   pull_request:
