@@ -1,7 +1,90 @@
 # tui-markup-renderer
 Rust library to use TUI and markup to build UI terminal interfaces.
 
+## tl;dr;
+
+Xml Code:
+```xml
+<layout id="root" direction="vertical">
+  <block constraint="10"> <!-- Don't forget the size, 1 by default -->
+    <p align="center">
+        Press q to quit.
+    </p>
+  </block>
+  <block id="bts_block" constraint="6">
+    <button id="btn_hello" action="open_dialog" index="1"> Say Hello </button>
+  </block>
+  <dialog id="dlg" show="show_dialog" buttons="Okay" action="on_dialog_event">
+    <block id="dlg_block" border="all">
+      <p align="center">
+        Hello World!!!
+      </p>
+    </block>
+  </dialog>
+</layout>
+```
+
+Rust Code:
+
+```rust
+use crossterm::event::KeyCode::{self, Char};
+use std::{collections::HashMap, io};
+use tui::backend::CrosstermBackend;
+use tui_markup_renderer::{event_response::EventResponse, markup_parser::MarkupParser};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // get access to StdOut
+    let stdout = io::stdout();
+    // Get the backend for TUI
+    let backend = CrosstermBackend::new(stdout);
+    // prepare the internal state for the app info
+    let state = Some(HashMap::new());
+
+    // prepare the markup parser
+    let mut mp = MarkupParser::new("./assets/layout.tml".to_string(), None, state);
+
+    // Dialogs generate button identifiers following the convention "on_<dialog id>_btn_<button name>"
+    mp.add_action("open_dialog", |state| {
+        let mut state = state.clone();
+        state.insert("show_dialog".to_string(), "true".to_string());
+        EventResponse::STATE(state)
+    })
+    .add_action("on_dlg_btn_Okay", |state| {
+        let mut state = state.clone();
+        state.insert("show_dialog".to_string(), "false".to_string());
+        EventResponse::STATE(state)
+    })
+    .ui_loop(backend, |key_event, mut state| {
+        let mut pressed = "none";
+        match key_event.code {
+            KeyCode::Esc => {
+                pressed = "close_dialog";
+            }
+            Char('q') => {
+                pressed = "close";
+            }
+            _ => {}
+        }
+
+        match pressed {
+            "close_dialog" => {
+                state.insert("show_dialog".to_string(), "false".to_string());
+                EventResponse::STATE(state)
+            }
+            "close" => {
+                state.insert("show_dialog".to_string(), "false".to_string());
+                EventResponse::QUIT
+            }
+            _ => EventResponse::NOOP,
+        }
+    })
+}
+```
+<img width="1503" alt="image" src="https://github.com/ogranada/tui-markup-renderer/assets/1445677/f03ecbb0-9c81-4617-aa6b-4c6d749d26c9">
+
+
 ## Explanation
+
 ### How it works
 
 As a developer is easier to create a known data structure describing the user interface.
@@ -88,6 +171,7 @@ generates:
   - bg (background color).
   - fg (foreground color).
   - weight (font weight).
+* You can have a UI state to store UI information. 
 
 ## A Sample
 
