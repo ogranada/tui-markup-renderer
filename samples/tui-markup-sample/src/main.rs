@@ -12,7 +12,7 @@ use tui_markup_renderer::{
 struct Args {
     #[arg(short, long, default_value_t = String::from("run"))]
     execution_type: String,
-    #[arg(short, long, default_value_t = String::from("./assets/layout1.tml"))]
+    #[arg(short, long, default_value_t = String::from("./assets/layout.tml"))]
     layout: String,
     #[arg(short, long, default_value_t = false)]
     print_args: bool,
@@ -32,27 +32,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut mp = MarkupParser::new(layout.clone(), None, state);
     mp.add_action(
         "do_something",
-        |_state: &mut HashMap<String, String>| {
+        |_state| {
             println!("hello!!!");
             EventResponse::NOOP
         },
     )
     .add_action(
         "do_something_else",
-        |_state: &mut HashMap<String, String>| {
+        |_state| {
             println!("world!!!");
             EventResponse::NOOP
         },
     )
     .add_action(
         "on_dlg1_btn_Yes",
-        |_state: &mut HashMap<String, String>| {
+        |_state| {
             EventResponse::QUIT
         },
     )
     .add_action(
         "on_dlg1_btn_Cancel",
-        |state: &mut HashMap<String, String>| {
+        |state| {
+            let mut state = state.clone();
             let key = "showQuitDialog".to_string();
             state.insert(key, "false".to_string());
             EventResponse::STATE(state.clone())

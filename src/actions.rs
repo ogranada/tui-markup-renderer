@@ -14,12 +14,12 @@ use tui::{
 
 use crate::event_response::EventResponse;
 
-type Callback = fn(&mut HashMap<String, String>) -> EventResponse;
+type Callback = fn(HashMap<String, String>) -> EventResponse;
 
 pub trait IActionsStorage {
     fn has_action(self: &Self, name: String) -> bool;
     fn add_action<'b>(self: &'b mut Self, name: String, render: Callback) -> &'b mut Self;
-    fn execute(self: &Self, name: String, state: &mut HashMap<String, String>) -> Option<EventResponse>;
+    fn execute(self: &Self, name: String, state: HashMap<String, String>) -> Option<EventResponse>;
 }
 
 pub struct ActionsStorage {
@@ -44,7 +44,7 @@ impl IActionsStorage for ActionsStorage {
         self.storage.contains_key(&name)
     }
 
-    fn execute(self: &Self, name: String, state: &mut HashMap<String, String>) -> Option<EventResponse> {
+    fn execute(self: &Self, name: String, state: HashMap<String, String>) -> Option<EventResponse> {
         let opt = self.storage.get(&name).clone();
         if opt.is_some() {
             let f = opt.unwrap();

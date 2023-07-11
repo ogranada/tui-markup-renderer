@@ -42,7 +42,7 @@ use crate::{
 
 ////////////// END LIBS //////////////
 
-type ActionCallback = fn(&mut HashMap<String, String>) -> EventResponse;
+type ActionCallback = fn(HashMap<String, String>) -> EventResponse;
 
 pub enum Event<I> {
     Input(I),
@@ -338,7 +338,7 @@ impl<B: Backend> MarkupParser<B> {
                 info!("Executing {}", action);
                 let new_state = self
                     .actions
-                    .execute(action.clone(), self.state.borrow_mut());
+                    .execute(action.clone(), self.state.clone());
                 if new_state.is_some() {
                     let event_response = new_state.unwrap();
                     return event_response
@@ -382,7 +382,6 @@ impl<B: Backend> MarkupParser<B> {
                     return true;
                 }
                 "p" => {
-                    // println!("--> {:?}", node.clone().dependencies);
                     let widget = self.draw_paragraph(&node, area.clone(), same, base_styles);
                     frame.render_widget(widget, area);
                     return true;
@@ -392,7 +391,6 @@ impl<B: Backend> MarkupParser<B> {
                     let show_flag = extract_attribute(new_node.clone().attributes, "show");
                     let default_val = "false".to_string();
                     let state_value = self.state.get(&show_flag).unwrap_or(&default_val);
-                    // print!("\r    =>> {:?}", self.contexts);
                     if state_value.clone().eq(&"true".to_string()) {
                         self.add_context(&node);
                         let widget = self.draw_dialog(&new_node, area.clone(), same, base_styles);
