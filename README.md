@@ -74,14 +74,20 @@ generates:
 ## The Rules!
 
 * A layout allow dev to define the direction flow.
-* A block is a panel can have:
+* A block is a panel that can have:
   - borders
   - title
   - constarint to define size of the element.
-* A blocks can be parent of a layout.
+* A block can be parent of a layout.
 * A container is a alias of a block.
-* A layout must contains blocks/containers as children in order to set user interfaces.
-
+* A layout should contains blocks/containers as children in order to set user interfaces.
+  However, the root layout cound have some elements (like dialogs).
+* Every element can have an identifier (_id_), but the identifiers mut be uniques.
+* You can create global styles using the _styles_ tag or the _styles_ property for elements.
+* The styles cover (for now):
+  - bg (background color).
+  - fg (foreground color).
+  - weight (font weight).
 
 ## A Sample
 
