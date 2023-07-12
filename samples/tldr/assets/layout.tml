@@ -16,8 +16,8 @@
   <block id="bts_block" constraint="6">
     <button id="btn_hello" action="open_dialog" index="1"> Say Hello </button>
   </block>
-  <dialog id="dlg" show="show_dialog" buttons="Okay" action="on_dialog_event">
-    <block id="dlg_block" border="all">
+  <dialog id="dlg" show="show_dialog" buttons="Okay" action="on_dialog_event" border="all">
+    <block id="dlg_block">
       <p align="center">
         Hello World!!!
       </p>

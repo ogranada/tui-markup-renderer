@@ -22,12 +22,10 @@ use std::{
 use tui::{
     backend::Backend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    // style::Style,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Span, Spans},
     widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap},
-    Frame,
-    Terminal,
+    Frame, Terminal,
 };
 use xml::reader::{EventReader, XmlEvent};
 
@@ -74,6 +72,7 @@ pub struct MarkupParser<B: Backend> {
     pub state: HashMap<String, String>,
     pub actions: ActionsStorage,
     pub global_styles: StylesStorage,
+    fingerprint: String,
 }
 
 impl<B: Backend> fmt::Debug for MarkupParser<B> {
@@ -192,6 +191,7 @@ impl<B: Backend> MarkupParser<B> {
                         actions: ActionsStorage::new(),
                         state: HashMap::new(),
                         global_styles: StylesStorage::new(),
+                        fingerprint: String::from("<empty>"),
                     };
                 }
                 _ => {}
@@ -211,6 +211,7 @@ impl<B: Backend> MarkupParser<B> {
             actions: ActionsStorage::new(),
             state,
             global_styles,
+            fingerprint: String::from("<empty>"),
         }
     }
 
@@ -225,9 +226,6 @@ impl<B: Backend> MarkupParser<B> {
         let styles = MarkupParser::<B>::get_styles(&child.clone(), focus);
         let styles = base_styles.patch(styles);
         let title = extract_attribute(child.attributes.clone(), "title");
-        if focus {
-            styles.fg(Color::Cyan);
-        }
         let border = extract_attribute(child.attributes.clone(), "border");
         let border = MarkupParser::<B>::get_border(border.as_str());
         let block = Block::default().title(title).style(styles).borders(border);
@@ -243,9 +241,6 @@ impl<B: Backend> MarkupParser<B> {
     ) -> Paragraph {
         let styles = MarkupParser::<B>::get_styles(&child.clone(), focus);
         let styles = base_styles.patch(styles);
-        if focus {
-            styles.fg(Color::Cyan);
-        }
         let alignment = MarkupParser::<B>::get_alignment(&child.clone());
         let block = self.draw_block(&child.clone(), area.clone(), focus, base_styles.clone());
         let p = Paragraph::new(child.text.clone().unwrap_or(String::from("")))
@@ -282,7 +277,10 @@ impl<B: Backend> MarkupParser<B> {
                 styles
             },
         )));
-        let block = Block::default().style(styles).borders(Borders::ALL);
+        let block = Block::default()
+            .style(styles)
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded);
         let p = Paragraph::new(lns_cntt)
             .style(styles)
             .alignment(Alignment::Center)
@@ -306,7 +304,7 @@ impl<B: Backend> MarkupParser<B> {
         let block = Block::default()
             .style(styles)
             .borders(Borders::ALL)
-            .border_type(BorderType::Rounded);
+            .border_type(BorderType::Double);
         block
     }
 
@@ -336,16 +334,36 @@ impl<B: Backend> MarkupParser<B> {
             let action = extract_attribute(current.attributes.clone(), "action");
             if self.actions.has_action(action.clone()) {
                 info!("Executing {}", action);
-                let new_state = self
-                    .actions
-                    .execute(action.clone(), self.state.clone());
+                let new_state = self.actions.execute(action.clone(), self.state.clone());
                 if new_state.is_some() {
                     let event_response = new_state.unwrap();
-                    return event_response
+                    return event_response;
                 }
             }
         }
         EventResponse::NOOP
+    }
+
+    fn get_element_styles(
+        &self,
+        node: &MarkupElement,
+        focus: bool,
+    ) -> Style {
+        let parent = node.parent_node.clone();
+        let parent_styles = if parent.is_some() {
+            let parent = parent.unwrap();
+            let parent = parent.as_ref().borrow().to_owned();
+            self.get_element_styles(&parent, focus)
+        } else {
+            Style::default()
+        };
+        let name = node.name.clone();
+        let rulename = format!("{}{}", name, if focus { ":focus" } else { "" });
+        let base_styles = parent_styles.patch(self.global_styles.get_rule(rulename));
+        let rulename = format!("#{}", node.id);
+        let elm_styles = self.global_styles.get_rule(rulename);
+        let base_styles = base_styles.patch(elm_styles);
+        base_styles
     }
 
     fn draw_element(
@@ -368,21 +386,19 @@ impl<B: Backend> MarkupParser<B> {
             if self.current > -1 {
                 cid = self.indexed_elements[self.current as usize].id.clone();
             }
-            let same = node.id.eq(&cid);
-            let rulename = format!("{}{}", name, if same { ":focus" } else { "" });
-            let base_styles = self.global_styles.get_rule(rulename);
-            let rulename = format!("#{}", node.id);
-            let elm_styles = self.global_styles.get_rule(rulename);
-            let base_styles = base_styles.patch(elm_styles);
-            frame.render_widget(Clear, area.clone());
+            let is_same_node = node.id.eq(&cid);
+            let base_styles = self.get_element_styles(&node, is_same_node);
             match name {
                 "container" | "block" => {
-                    let widget = self.draw_block(&node, area.clone(), same, base_styles);
+                    let widget = self.draw_block(&node, area.clone(), is_same_node, base_styles);
+                    frame.render_widget(Clear, area.clone());
                     frame.render_widget(widget, area);
                     return true;
                 }
                 "p" => {
-                    let widget = self.draw_paragraph(&node, area.clone(), same, base_styles);
+                    let widget =
+                        self.draw_paragraph(&node, area.clone(), is_same_node, base_styles);
+                    frame.render_widget(Clear, area.clone());
                     frame.render_widget(widget, area);
                     return true;
                 }
@@ -393,7 +409,9 @@ impl<B: Backend> MarkupParser<B> {
                     let state_value = self.state.get(&show_flag).unwrap_or(&default_val);
                     if state_value.clone().eq(&"true".to_string()) {
                         self.add_context(&node);
-                        let widget = self.draw_dialog(&new_node, area.clone(), same, base_styles);
+                        let widget =
+                            self.draw_dialog(&new_node, area.clone(), is_same_node, base_styles);
+                        frame.render_widget(Clear, area.clone());
                         frame.render_widget(widget, area);
                         return true;
                     } else {
@@ -403,17 +421,20 @@ impl<B: Backend> MarkupParser<B> {
                 }
                 "button" => {
                     let mut new_area = area.clone();
-                    new_area.height = if new_area.height > 5 {
-                        5
+                    new_area.height = if new_area.height > 3 {
+                        3
                     } else {
                         new_area.height
                     };
-                    let widget = self.draw_button(&node, new_area.clone(), same, base_styles);
+                    let widget =
+                        self.draw_button(&node, new_area.clone(), is_same_node, base_styles);
+                    frame.render_widget(Clear, area.clone());
                     frame.render_widget(widget, new_area);
                     return true;
                 }
                 _ => {
                     let widget = Block::default();
+                    frame.render_widget(Clear, area.clone());
                     frame.render_widget(widget, area);
                     return true;
                 }
@@ -579,6 +600,7 @@ impl<B: Backend> MarkupParser<B> {
         let mut current = node.clone();
         let id = extract_attribute(current.attributes.clone(), "id");
         let mut split_space = place.unwrap_or(frame.size());
+        let mut child_space = split_space.clone();
         let mut res: Vec<(Rect, MarkupElement)> = vec![];
         let mut subsequents: Vec<(Rect, MarkupElement)> = vec![];
         let mut dependency = depends_on;
@@ -592,50 +614,65 @@ impl<B: Backend> MarkupParser<B> {
 
         match node.name.as_str() {
             "dialog" => {
-                let layout = Layout::default()
+                let horizontal_layout = Layout::default()
                     .direction(Direction::Horizontal)
                     .margin(margin.unwrap_or(0))
                     .constraints(
                         vec![
-                            Constraint::Percentage(35),
-                            Constraint::Percentage(30),
-                            Constraint::Percentage(35),
+                            Constraint::Percentage(34),
+                            Constraint::Percentage(32),
+                            Constraint::Percentage(34),
                         ]
                         .as_ref(),
                     );
-                let h_chunks = layout.split(frame.size());
+                let horizontal_chunks = horizontal_layout.split(frame.size());
 
-                let layout = Layout::default()
+                let vertical_layout = Layout::default()
                     .direction(Direction::Vertical)
                     .margin(margin.unwrap_or(0))
                     .constraints(
                         vec![
-                            Constraint::Percentage(35),
-                            Constraint::Percentage(30),
-                            Constraint::Percentage(35),
+                            Constraint::Percentage(31),
+                            Constraint::Percentage(34),
+                            Constraint::Percentage(31),
                         ]
                         .as_ref(),
                     );
-                let chunks = layout.split(h_chunks[1]);
+                let vertical_chunks = vertical_layout.split(horizontal_chunks[1]);
+
+                split_space = vertical_chunks[1].clone();
+                let dialog_space = vertical_chunks[1];
 
                 let dialog_parts = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints(
-                        vec![Constraint::Percentage(60), Constraint::Percentage(40)].as_ref(),
-                    );
-                let location = chunks[1].clone();
-                let dialog_chunks = dialog_parts.split(chunks[1]);
-                let buttons_layout = Layout::default()
-                    .direction(Direction::Horizontal)
                     .margin(1)
                     .constraints(
-                        vec![Constraint::Percentage(50), Constraint::Percentage(50)].as_ref(),
+                        vec![Constraint::Percentage(80), Constraint::Percentage(20)].as_ref(),
                     );
-                let button_chunks = buttons_layout.split(dialog_chunks[1]);
+                let dialog_chunks = dialog_parts.split(dialog_space);
+
+                let action = extract_attribute(node.attributes.clone(), "action");
                 let btns = extract_attribute(node.attributes.clone(), "buttons");
-                let btns = btns.split("|");
-                for (elm_idx, btn) in btns.enumerate() {
+                let btns: Vec<String> = btns.split("|").map(|x| String::from(x)).collect();
+                let btn_constraints: Vec<Constraint> = btns
+                    .clone()
+                    .iter()
+                    .map(|_| Constraint::Percentage((100 / btns.len()) as u16))
+                    .collect();
+
+                let buttons_layout = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints(btn_constraints.as_ref());
+                child_space = dialog_chunks[0];
+                let button_chunks = buttons_layout.split(dialog_chunks[1]);
+
+                for (elm_idx, btn) in btns.iter().enumerate() {
                     let btn_id = format!("{}_btn_{}", node.id, btn);
+                    let btn_action = if action.len() > 0 {
+                        action.clone()
+                    } else {
+                        format!("on_{}", btn_id)
+                    };
                     let btn_elm = MarkupElement {
                         deep: node.deep + 1,
                         id: btn_id.clone(),
@@ -644,7 +681,7 @@ impl<B: Backend> MarkupParser<B> {
                         name: String::from("button"),
                         attributes: HashMap::from([
                             ("id".to_string(), btn_id.clone()),
-                            ("action".to_string(), format!("on_{}", btn_id)),
+                            ("action".to_string(), btn_action),
                             ("index".to_string(), format!("{}", elm_idx)),
                         ]),
                         children: vec![],
@@ -655,8 +692,6 @@ impl<B: Backend> MarkupParser<B> {
                     current.children.push(btn_desc);
                     subsequents.push((button_chunks[elm_idx], btn_elm));
                 }
-
-                split_space = location;
                 dependency = Some(node.clone());
             }
             _ => {
@@ -678,7 +713,7 @@ impl<B: Backend> MarkupParser<B> {
                 frame,
                 &child,
                 dependency.clone(),
-                Some(split_space.clone()),
+                Some(child_space.clone()),
                 Some(1),
                 count + 1,
             );
@@ -748,13 +783,35 @@ impl<B: Backend> MarkupParser<B> {
             return true;
         }
         let mut res = false;
-        // println!("-> {:?}", &node.dependencies);
         for eid in others {
             if drawn.contains(&eid) {
                 res = true;
             }
         }
         res
+    }
+
+    fn get_fingerprint(&self) -> String {
+        let idxd: Vec<String> = self.indexed_elements
+            .iter()
+            .map(|x|{ x.id.clone() })
+            .collect()
+            ;
+        let mut state_fngrprnt = format!(
+            "{}:{}:{}:",
+            self.current,
+            self.contexts.len(),
+            idxd.join("~")
+        );
+        for (key, value) in self.state.clone().iter() {
+            state_fngrprnt = format!("{}-{}_{}", state_fngrprnt, key, value);
+        }
+        state_fngrprnt
+    }
+
+    fn update_fingerprint(&mut self) {
+        let state_fngrprnt = self.get_fingerprint();
+        self.fingerprint = state_fngrprnt;
     }
 
     /// Render the current state of the tree
@@ -797,6 +854,7 @@ impl<B: Backend> MarkupParser<B> {
             self.indexed_elements = chld;
             self.current = -1;
         }
+        self.fingerprint = String::from("<>");
     }
 
     pub fn remove_context(self: &mut Self, node: &MarkupElement) {
@@ -809,6 +867,7 @@ impl<B: Backend> MarkupParser<B> {
                 self.current = -1;
             }
         }
+        self.fingerprint = String::from("<>");
     }
 
     pub fn test_check(self: &Self, backend: B) -> Result<(), Box<dyn std::error::Error>> {
@@ -875,12 +934,15 @@ impl<B: Backend> MarkupParser<B> {
                 }
             }
         });
-
         let mut should_quit: bool = false;
         loop {
-            terminal.draw(|frame| {
-                self.render_ui(frame);
-            })?;
+            let new_fprnt = self.get_fingerprint();
+            if !new_fprnt.eq(&self.fingerprint) {
+                terminal.draw(|frame| {
+                    self.render_ui(frame);
+                    self.update_fingerprint();
+                })?;
+            }
             let evt: Event<crossterm::event::KeyEvent> = rx.recv()?;
             if let Event::Input(key_event) = evt {
                 let event = key_event.clone();
@@ -1073,11 +1135,13 @@ impl<B: Backend> MarkupParser<B> {
             .collect::<Vec<(&str, &str)>>();
         let styles: HashMap<&str, &str> = styles_vec.into_iter().collect();
         if styles.contains_key("bg") {
-            let color = color_from_str(styles.get("bg").unwrap());
+            let color = styles.get("bg").unwrap();
+            let color = color_from_str(color);
             res = res.bg(color);
         }
         if styles.contains_key("fg") {
-            let color = color_from_str(styles.get("fg").unwrap());
+            let color = styles.get("fg").unwrap();
+            let color = color_from_str(color);
             res = res.fg(color);
         }
         if styles.contains_key("weight") {

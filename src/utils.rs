@@ -37,15 +37,39 @@ pub fn color_from_str(input: &str) -> Color {
       "magenta" => Color::Magenta,
       "cyan" => Color::Cyan,
       "gray" => Color::Gray,
-      "darkGray" => Color::DarkGray,
-      "lightRed" => Color::LightRed,
-      "lightGreen" => Color::LightGreen,
-      "lightYellow" => Color::LightYellow,
-      "lightBlue" => Color::LightBlue,
-      "lightMagenta" => Color::LightMagenta,
-      "lightCyan" => Color::LightCyan,
+      "darkgray" => Color::DarkGray,
+      "lightred" => Color::LightRed,
+      "lightgreen" => Color::LightGreen,
+      "lightyellow" => Color::LightYellow,
+      "lightblue" => Color::LightBlue,
+      "lightmagenta" => Color::LightMagenta,
+      "lightcyan" => Color::LightCyan,
       "white" => Color::White,
       _ => Color::Reset,
+  }
+}
+
+pub fn contrast_color(input: &str) -> &str {
+  let input = input.to_lowercase();
+  let input = input.as_str();
+  match input {
+      "black" => "white",
+      "red" => "lightRed",
+      "green" => "lightgreen",
+      "yellow" => "lightyellow",
+      "blue" => "lightmagenta",
+      "magenta" => "lightmagenta",
+      "cyan" => "lightcyan",
+      "gray" => "darkgray",
+      "darkgray" => "gray",
+      "lightred" => "red",
+      "lightgreen" => "green",
+      "lightyellow" => "yellow",
+      "lightblue" => "blue",
+      "lightmagenta" => "magenta",
+      "lightcyan" => "cyan",
+      "white" => "black",
+      _ => "",
   }
 }
 

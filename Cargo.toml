@@ -1,6 +1,6 @@
 [package]
 name = "tui-markup-renderer"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 
 description = "Rust library to use TUI and markup to build UI terminal interfaces."

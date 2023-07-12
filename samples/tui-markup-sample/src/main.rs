@@ -1,11 +1,8 @@
 use clap::Parser;
-use crossterm::event::KeyCode::{Char, self};
+use crossterm::event::KeyCode::{self, Char};
 use std::{collections::HashMap, io};
 use tui::backend::CrosstermBackend;
-use tui_markup_renderer::{
-    markup_parser::MarkupParser,
-    event_response::EventResponse,
-};
+use tui_markup_renderer::{event_response::EventResponse, markup_parser::MarkupParser};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -30,36 +27,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = Some(HashMap::new());
 
     let mut mp = MarkupParser::new(layout.clone(), None, state);
-    mp.add_action(
-        "do_something",
-        |_state| {
-            println!("hello!!!");
-            EventResponse::NOOP
-        },
-    )
-    .add_action(
-        "do_something_else",
-        |_state| {
-            println!("world!!!");
-            EventResponse::NOOP
-        },
-    )
-    .add_action(
-        "on_dlg1_btn_Yes",
-        |_state| {
-            EventResponse::QUIT
-        },
-    )
-    .add_action(
-        "on_dlg1_btn_Cancel",
-        |state| {
-            let mut state = state.clone();
-            let key = "showQuitDialog".to_string();
-            state.insert(key, "false".to_string());
-            EventResponse::STATE(state.clone())
-        },
-    )
-    ;
+    mp.add_action("do_something", |state| {
+        let mut state = state.clone();
+        let key = "showMessageDialog".to_string();
+        state.insert(key, "true".to_string());
+        EventResponse::STATE(state.clone())
+    })
+    .add_action("do_something_else", |state| {
+        let mut state = state.clone();
+        let key = "showMessageDialog".to_string();
+        state.insert(key, "true".to_string());
+        EventResponse::STATE(state.clone())
+    })
+    .add_action("on_dlg1_btn_Yes", |_state| EventResponse::QUIT)
+    .add_action("on_close_dialog", |state| {
+        let mut state = state.clone();
+        let key = "showMessageDialog".to_string();
+        state.insert(key, "false".to_string());
+        EventResponse::STATE(state.clone())
+    })
+    .add_action("on_dlg1_btn_Cancel", |state| {
+        let mut state = state.clone();
+        let key = "showQuitDialog".to_string();
+        state.insert(key, "false".to_string());
+        EventResponse::STATE(state.clone())
+    });
 
     if print_args {
         println!(
@@ -87,25 +79,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             if pressed == '\r' {
                 let new_value = "false";
-                new_state.insert(
-                    key,
-                    new_value.to_string(),
-                );
+                new_state.insert(key, new_value.to_string());
                 return EventResponse::STATE(new_state);
             }
 
             if pressed == 'q' {
                 let new_value = "true";
-                new_state.insert(
-                    key,
-                    new_value.to_string(),
-                );
+                new_state.insert(key, new_value.to_string());
                 return EventResponse::STATE(new_state);
             }
 
-            // if pressed == 'p' {
-            //     return EventResponse::QUIT;
-            // }
+            if pressed == 'p' {
+                return EventResponse::QUIT;
+            }
             return EventResponse::NOOP;
         })
     } else {

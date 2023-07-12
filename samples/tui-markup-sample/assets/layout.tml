@@ -1,5 +1,8 @@
 <layout id="root" direction="vertical">
   <styles>
+    #toolbar {
+      fg: lightgreen;
+    }
 
     button {
       fg: red;
@@ -10,13 +13,20 @@
       fg: white;
       bg: red;
     }
+
     #footer {
       bg:black;
       fg:blue;
     }
+
+    #cnt_block {
+      bg: gray;
+      fg: black;
+    }
+
   </styles>
   <container id="nav_container" constraint="5">
-    <p id="toolbar" title="Actions" border="all" styles="fg:green">
+    <p id="toolbar" title="Actions" border="all" styles="bg:blue">
       Header sample
     </p>
   </container>
@@ -27,14 +37,14 @@
         <container id="ats_container" constraint="20%" title="Ats" border="all">
 
           <layout id="vert_info" direction="vertical">
-            <block id="ats_block" constraint="5">
+            <block id="ats_block" constraint="3">
               <button id="btn_hello" action="do_something" index="1" styles="fg:magenta" focus_styles="fg:white;bg:magenta"> Hello </button> 
             </block>
-            <block id="bts_block" constraint="5">
+            <block id="bts_block" constraint="3">
               <button id="btn_hello_2" action="do_something_else" index="3"> Simple </button> 
             </block>
-            <block id="bts_block" constraint="5">
-              <button id="btn_hello_3" action="do_something_else" index="2"> World </button> 
+            <block id="bts_block" constraint="3">
+              <button id="btn_hello_3" action="do_something_else" index="2" styles="fg:green" focus_styles="fg:white;bg:green"> World </button> 
             </block>
           </layout>
 
@@ -55,7 +65,7 @@
       Footer sample
     </p>
   </container>
-  <dialog id="dlg1" show="showQuitDialog" buttons="Yes|Cancel" action="on_dialog_event">
+  <dialog id="dlg1" show="showQuitDialog" buttons="Yes|Cancel">
     <layout direction="vertical">
       <container constraint="3">
         <p align="center" styles="weight:bold">
@@ -69,4 +79,19 @@
       </container>
     </layout>
   </dialog>
+  <dialog id="dlg2" show="showMessageDialog" buttons="Okay" action="on_close_dialog">
+    <layout direction="vertical">
+      <container constraint="3">
+        <p align="center" styles="weight:bold">
+          Message!
+        </p>
+      </container>
+      <container>
+        <p align="center">
+          This is a simple message.
+        </p>
+      </container>
+    </layout>
+  </dialog>
+
 </layout>
