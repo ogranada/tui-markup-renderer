@@ -1,0 +1,22 @@
+<Layout id="root" direction="horizontal">
+  <block id="blk1" constraint="100%">
+    <tabs id="tabs-cmp" constraint="100%" border="all" title="Layout 2">
+      <tabs-header id="t-header" title="Actions">
+        <tab-item id="tab1"> Tab 1 </tab-item>
+        <tab-item id="tab2"> Tab 2 </tab-item>
+      </tabs-header>
+      <tabs-body id="t-body" linked-to="tabs1">
+        <tab-content id="ctt-1" for="tab1">
+          <p id="prg-1">
+            Sample 1 lorem ipsum dolor sit amet
+          </p>
+        </tab-content>
+        <tab-content id="ctt-2" for="tab2">
+          <p id="prg-2">
+            Sample 2 lorem ipsum dolor sit amet
+          </p>
+        </tab-content>
+      </tabs-body>
+    </tabs>
+  </block>
+</Layout>

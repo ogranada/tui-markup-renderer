@@ -6,11 +6,12 @@ use std::io::Stdout;
 use tui::style::Style;
 
 pub trait IStylesStorage {
-    fn has_rule(self: &Self, name: String) -> bool;
-    fn add_rule<'b>(self: &'b mut Self, name: String, styles: Style) -> &'b mut Self;
-    fn get_rule(self: &Self, name: String) -> Style;
+    fn has_rule(&self, name: String) -> bool;
+    fn add_rule(&mut self, name: String, styles: Style) -> &mut Self;
+    fn get_rule(&self, name: String) -> Style;
 }
 
+#[derive(Default)]
 pub struct StylesStorage {
     storage: HashMap<String, Style>,
 }
@@ -24,19 +25,19 @@ impl StylesStorage {
 }
 
 impl IStylesStorage for StylesStorage {
-    fn add_rule<'b>(self: &'b mut Self, name: String, styles: Style) -> &'b mut Self {
+    fn add_rule(&mut self, name: String, styles: Style) -> &mut Self {
         self.storage.entry(name).or_insert(styles);
         self
     }
 
-    fn has_rule(self: &Self, name: String) -> bool {
+    fn has_rule(&self, name: String) -> bool {
         self.storage.contains_key(&name)
     }
 
-    fn get_rule(self: &Self, name: String) -> Style {
+    fn get_rule(&self, name: String) -> Style {
         let opt = self.storage.get(&name);
-        if opt.is_some() {
-            opt.unwrap().clone()
+        if let Some(value) = opt {
+            *value
         } else {
             Style::default()
         }
@@ -50,3 +51,4 @@ impl fmt::Debug for StylesStorage {
         r.finish()
     }
 }
+

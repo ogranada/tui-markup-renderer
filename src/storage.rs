@@ -15,11 +15,12 @@ use tui::{
 type Callback<B> = fn(&mut Frame<B>);
 
 pub trait IRendererStorage<B: Backend> {
-    fn has_component(self: &Self, tagname: &str) -> bool;
-    fn add_renderer<'b>(self: &'b mut Self, tagname: &'b str, render: Callback<B>) -> &'b mut Self;
-    fn render(self: &Self, tagname: &str, frame: &mut Frame<B>);
+    fn has_component(&self, tagname: &str) -> bool;
+    fn add_renderer<'b>(&'b mut self, tagname: &'b str, render: Callback<B>) -> &'b mut Self;
+    fn render(&self, tagname: &str, frame: &mut Frame<B>);
 }
 
+#[derive(Default)]
 pub struct RendererStorage<B: Backend> {
     storage: HashMap<String, Callback<B>>,
 }
@@ -33,19 +34,18 @@ impl<B: Backend> RendererStorage<B> {
 }
 
 impl<B: Backend> IRendererStorage<B> for RendererStorage<B> {
-    fn add_renderer<'b>(self: &'b mut Self, tagname: &'b str, render: Callback<B>) -> &'b mut Self {
+    fn add_renderer<'b>(&'b mut self, tagname: &'b str, render: Callback<B>) -> &'b mut Self {
         self.storage.entry(tagname.to_owned()).or_insert(render);
         self
     }
 
-    fn has_component(self: &Self, tagname: &str) -> bool {
+    fn has_component(&self, tagname: &str) -> bool {
         self.storage.contains_key(tagname)
     }
 
-    fn render(self: &Self, tagname: &str, frame: &mut Frame<B>) {
-        let opt = self.storage.get(tagname).clone();
-        if opt.is_some() {
-            let f = opt.unwrap();
+    fn render(&self, tagname: &str, frame: &mut Frame<B>) {
+        let opt = self.storage.get(tagname);
+        if let Some(f) = opt {
             f(frame);
         }
     }

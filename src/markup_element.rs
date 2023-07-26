@@ -19,7 +19,7 @@ impl Clone for MarkupElement {
             id: self.id.clone(),
             name: self.name.clone(),
             text: self.text.clone(),
-            order: self.order.clone(),
+            order: self.order,
             attributes: self.attributes.clone(),
             children: self.children.clone(),
             parent_node: self.parent_node.clone(),
@@ -35,8 +35,8 @@ impl fmt::Display for MarkupElement {
             .attributes
             .keys()
             .map(|key| {
-                let value = self.attributes.get(key);
-                let value = if value.is_some() { value.unwrap() } else { "" };
+                let wrapped_value = self.attributes.get(key);
+                let value = if let Some(value) = wrapped_value { value } else { "" };
                 format!(" {}=\"{}\"", key, value)
             })
             .collect();

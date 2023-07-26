@@ -13,15 +13,17 @@ use tui::{
 };
 
 use crate::event_response::EventResponse;
+use crate::markup_element::MarkupElement;
 
-type Callback = fn(HashMap<String, String>) -> EventResponse;
+type Callback = fn(HashMap<String, String>, Option<MarkupElement>) -> EventResponse;
 
 pub trait IActionsStorage {
-    fn has_action(self: &Self, name: String) -> bool;
-    fn add_action<'b>(self: &'b mut Self, name: String, render: Callback) -> &'b mut Self;
-    fn execute(self: &Self, name: String, state: HashMap<String, String>) -> Option<EventResponse>;
+    fn has_action(&self, name: String) -> bool;
+    fn add_action(&mut self, name: String, render: Callback) -> &mut Self;
+    fn execute(&self, name: String, state: HashMap<String, String>, node: Option<MarkupElement>) -> Option<EventResponse>;
 }
 
+#[derive(Default)]
 pub struct ActionsStorage {
     storage: HashMap<String, Callback>,
 }
@@ -35,23 +37,18 @@ impl ActionsStorage {
 }
 
 impl IActionsStorage for ActionsStorage {
-    fn add_action<'b>(self: &'b mut Self, name: String, action: Callback) -> &'b mut Self {
+    fn add_action(&mut self, name: String, action: Callback) -> &mut Self {
         self.storage.entry(name).or_insert(action);
         self
     }
 
-    fn has_action(self: &Self, name: String) -> bool {
+    fn has_action(&self, name: String) -> bool {
         self.storage.contains_key(&name)
     }
 
-    fn execute(self: &Self, name: String, state: HashMap<String, String>) -> Option<EventResponse> {
-        let opt = self.storage.get(&name).clone();
-        if opt.is_some() {
-            let f = opt.unwrap();
-            Some(f(state))
-        } else {
-            None
-        }
+    fn execute(&self, name: String, state: HashMap<String, String>, node: Option<MarkupElement>) -> Option<EventResponse> {
+        let opt = self.storage.get(&name);
+        opt.map(|f| f(state, node.clone()))
     }
 }
 

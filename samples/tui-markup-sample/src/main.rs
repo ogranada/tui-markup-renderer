@@ -25,28 +25,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stdout = io::stdout();
     let backend = CrosstermBackend::new(stdout);
     let state = Some(HashMap::new());
+    /*
+    let state = Some(HashMap::from([(
+        "tabs-cmp:index".to_string(),
+        "tab2".to_string(),
+    )]));
+    */
 
     let mut mp = MarkupParser::new(layout.clone(), None, state);
-    mp.add_action("do_something", |state| {
+    mp.add_action("do_something", |state, _node| {
         let mut state = state.clone();
         let key = "showMessageDialog".to_string();
         state.insert(key, "true".to_string());
         EventResponse::STATE(state.clone())
     })
-    .add_action("do_something_else", |state| {
+    .add_action("do_something_else", |state, _node| {
         let mut state = state.clone();
         let key = "showMessageDialog".to_string();
         state.insert(key, "true".to_string());
         EventResponse::STATE(state.clone())
     })
-    .add_action("on_dlg1_btn_Yes", |_state| EventResponse::QUIT)
-    .add_action("on_close_dialog", |state| {
+    .add_action("on_dlg1_btn_Yes", |_state, _node| EventResponse::QUIT)
+    .add_action("on_close_dialog", |state, _node| {
         let mut state = state.clone();
         let key = "showMessageDialog".to_string();
         state.insert(key, "false".to_string());
         EventResponse::STATE(state.clone())
     })
-    .add_action("on_dlg1_btn_Cancel", |state| {
+    .add_action("on_dlg1_btn_Cancel", |state, _node| {
         let mut state = state.clone();
         let key = "showQuitDialog".to_string();
         state.insert(key, "false".to_string());

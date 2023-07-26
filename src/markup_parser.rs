@@ -35,19 +35,19 @@ use crate::{
     markup_element::MarkupElement,
     storage::{IRendererStorage, RendererStorage},
     styles::{IStylesStorage, StylesStorage},
-    utils::{color_from_str, extract_attribute, modifier_from_str},
+    utils::{color_from_str, extract_attribute, modifier_from_str, modifiers_from_str},
 };
 
 ////////////// END LIBS //////////////
 
-type ActionCallback = fn(HashMap<String, String>) -> EventResponse;
+type ActionCallback = fn(HashMap<String, String>, Option<MarkupElement>) -> EventResponse;
 
 pub enum Event<I> {
     Input(I),
     Tick,
 }
 
-const WIDGET_NAMES: &'static [&'static str] = &["p", "button"];
+const WIDGET_NAMES: &[&str] = &["p", "button"];
 
 /**
  * To use specific features you can use the macro:
@@ -105,24 +105,62 @@ impl<B: Backend> MarkupParser<B> {
         let mut global_styles = StylesStorage::new();
         let mut indexed_elements = vec![];
         let mut cntr = 0;
+        let mut parent_count = 0;
+        let mut actions = ActionsStorage::new();
         for e in parser {
             cntr += 1;
             match e {
                 Ok(XmlEvent::StartElement {
                     name, attributes, ..
                 }) => {
+                    let valid_name = name.local_name.clone();
                     let mut attrs = HashMap::new();
                     for attr in attributes {
                         attrs.insert(attr.name.local_name, attr.value);
                     }
+
+                    // TO DO: prepare default attributes depending on the node type
+                    if valid_name.eq("tab-item") {
+                        if !attrs.contains_key("action") {
+                            attrs.insert("action".to_string(), "__change_tab".to_string());
+                        }
+                        if !attrs.contains_key("index") {
+                            attrs.insert("index".to_string(), format!("{}", cntr));
+                        }
+                        if !attrs.contains_key("tabs-id") && parent_node.is_some() {
+                            let pn = MarkupParser::<B>::get_element(parent_node.clone());
+                            let gpn = MarkupParser::<B>::get_element(pn.parent_node);
+                            attrs.insert("tabs-id".to_string(), gpn.id);
+                        }
+                    }
+                    if valid_name.eq("tab-content")
+                        && !attrs.contains_key("tabs-id")
+                        && parent_node.is_some()
+                    {
+                        let pn = MarkupParser::<B>::get_element(parent_node.clone());
+                        let gpn = MarkupParser::<B>::get_element(pn.parent_node);
+                        attrs.insert("tabs-id".to_string(), gpn.id);
+                    }
+
                     let unknown_id = format!("unknown_elm_{}", cntr);
                     let _id = attrs.get("id").unwrap_or(&unknown_id);
                     let unknown_idx = "-1".to_owned();
-                    let elm_idx = attrs
-                        .get("index")
-                        .unwrap_or(&unknown_idx)
-                        .parse::<i32>()
-                        .unwrap_or(-1);
+
+                    let posible_elm_idx = if valid_name.eq(&"tab-item") {
+                        parent_count * 10 + cntr
+                    } else {
+                        -1
+                    };
+                    let elm_idx = if posible_elm_idx > -1 {
+                        posible_elm_idx
+                    } else {
+                        attrs
+                            .get("index")
+                            .unwrap_or(&unknown_idx)
+                            .parse::<i32>()
+                            .unwrap_or(posible_elm_idx)
+                    };
+
                     let partial = MarkupElement {
                         deep: if parent_node.is_some() {
                             MarkupParser::<B>::get_element(parent_node.clone()).deep + 1
@@ -132,7 +170,7 @@ impl<B: Backend> MarkupParser<B> {
                         id: String::from(_id),
                         text: None,
                         order: elm_idx,
-                        name: name.local_name,
+                        name: name.local_name.to_lowercase(),
                         attributes: attrs,
                         children: vec![],
                         parent_node: parent_node.clone(),
@@ -160,6 +198,7 @@ impl<B: Backend> MarkupParser<B> {
                     }
 
                     parent_node = current_node.clone();
+                    parent_count = elm_idx;
                 }
                 Ok(XmlEvent::Characters(ref r)) => {
                     let node = current_node.clone();
@@ -178,11 +217,10 @@ impl<B: Backend> MarkupParser<B> {
                 }
                 Ok(XmlEvent::EndDocument { .. }) => {}
                 Err(e) => {
-                    println!("error: {:?}", e);
                     return MarkupParser {
-                        path: path.to_string(),
+                        path,
                         failed: true,
-                        error: Some(format!("{}", e.msg())),
+                        error: Some(e.msg().to_string()),
                         root: None,
                         storage: None,
                         current: -1,
@@ -199,16 +237,24 @@ impl<B: Backend> MarkupParser<B> {
         }
         indexed_elements.sort_by(|e1, e2| e1.order.cmp(&e2.order));
         let state = initial_state.unwrap_or(HashMap::new());
+        actions.add_action("__change_tab".to_string(), |old_state, node_wrapper| {
+            let mut state = old_state;
+            if let Some(node) = node_wrapper {
+                let key = node.attributes.get("tabs-id").unwrap();
+                state.insert(format!("{}:index", key), node.id.clone());
+            }
+            EventResponse::CLEANFOCUS(state)
+        });
         MarkupParser {
-            path: path.to_string(),
+            path,
             failed: false,
             error: None,
-            root: root_node.clone(),
+            root: root_node,
             storage: Some(Rc::new(RefCell::new(storage))),
             current: -1,
             indexed_elements,
             contexts: vec![],
-            actions: ActionsStorage::new(),
+            actions,
             state,
             global_styles,
             fingerprint: String::from("<empty>"),
@@ -221,9 +267,10 @@ impl<B: Backend> MarkupParser<B> {
         child: &MarkupElement,
         _area: Rect,
         focus: bool,
+        active: bool,
         base_styles: Style,
     ) -> Block {
-        let styles = MarkupParser::<B>::get_styles(&child.clone(), focus);
+        let styles = MarkupParser::<B>::get_styles(&child.clone(), focus, active);
         let styles = base_styles.patch(styles);
         let title = extract_attribute(child.attributes.clone(), "title");
         let border = extract_attribute(child.attributes.clone(), "border");
@@ -237,12 +284,13 @@ impl<B: Backend> MarkupParser<B> {
         child: &MarkupElement,
         area: Rect,
         focus: bool,
+        active: bool,
         base_styles: Style,
     ) -> Paragraph {
-        let styles = MarkupParser::<B>::get_styles(&child.clone(), focus);
+        let styles = MarkupParser::<B>::get_styles(&child.clone(), focus, active);
         let styles = base_styles.patch(styles);
         let alignment = MarkupParser::<B>::get_alignment(&child.clone());
-        let block = self.draw_block(&child.clone(), area.clone(), focus, base_styles.clone());
+        let block = self.draw_block(&child.clone(), area, focus, active, base_styles);
         let p = Paragraph::new(child.text.clone().unwrap_or(String::from("")))
             .style(styles)
             .alignment(alignment)
@@ -256,9 +304,10 @@ impl<B: Backend> MarkupParser<B> {
         child: &MarkupElement,
         area: Rect,
         focus: bool,
+        active: bool,
         base_styles: Style,
     ) -> Paragraph {
-        let styles = MarkupParser::<B>::get_styles(&child.clone(), focus);
+        let styles = MarkupParser::<B>::get_styles(&child.clone(), focus, active);
         let styles = base_styles.patch(styles);
         let mut elcnt = usize::from(area.height);
         if area.height > 0 {
@@ -293,14 +342,11 @@ impl<B: Backend> MarkupParser<B> {
         child: &MarkupElement,
         _area: Rect,
         focus: bool,
+        active: bool,
         base_styles: Style,
     ) -> Block {
-        let styles = MarkupParser::<B>::get_styles(&child.clone(), focus);
+        let styles = MarkupParser::<B>::get_styles(&child.clone(), focus, active);
         let styles = base_styles.patch(styles);
-        let text = child.text.clone().unwrap_or(String::from(""));
-        let mut lns_cntt = vec![];
-        lns_cntt.push(Spans::from(""));
-        lns_cntt.push(Spans::from(Span::styled(text, styles)));
         let block = Block::default()
             .style(styles)
             .borders(Borders::ALL)
@@ -308,7 +354,60 @@ impl<B: Backend> MarkupParser<B> {
         block
     }
 
-    fn go_next(self: &mut Self) -> i32 {
+    fn draw_tab_borders(
+        &self,
+        _child: &MarkupElement,
+        _area: Rect,
+        _focus: bool,
+        _active: bool,
+        _base_styles: Style,
+    ) -> Block {
+        let block = Block::default()
+            .borders(Borders::BOTTOM)
+            .border_type(BorderType::Rounded);
+        block
+    }
+
+    fn draw_tab_item(
+        &self,
+        child: &MarkupElement,
+        _area: Rect,
+        _focus: bool,
+        _active: bool,
+        base_styles: Style,
+    ) -> Paragraph {
+        /*
+        let styles = if focus {
+            Style::default()
+                .fg(Color::Gray)
+                .add_modifier(Modifier::DIM)
+        } else {
+            Style::default()
+                .fg(Color::DarkGray)
+        };
+        let styles = if active {
+            styles.add_modifier(Modifier::BOLD)
+        } else {
+            styles
+        };
+
+        let styles = styles.patch(base_styles);
+        */
+        let styles = base_styles;
+        let text = child.text.clone();
+        let text = text.unwrap_or("Tab".to_string());
+        let block = Block::default()
+            .style(styles)
+            .borders(Borders::TOP | Borders::RIGHT | Borders::LEFT)
+            .border_type(BorderType::Rounded);
+        let p = Paragraph::new(text)
+            .style(styles)
+            .alignment(Alignment::Center)
+            .block(block);
+        p
+    }
+
+    fn go_next(&mut self) -> i32 {
         let size = i32::try_from(self.indexed_elements.len()).unwrap() - 2;
         if self.current > size {
             self.current = -1;
@@ -318,7 +417,7 @@ impl<B: Backend> MarkupParser<B> {
         self.current
     }
 
-    fn go_prev(self: &mut Self) -> i32 {
+    fn go_prev(&mut self) -> i32 {
         let size = i32::try_from(self.indexed_elements.len()).unwrap() - 1;
         if self.current < 0 {
             self.current = size;
@@ -328,15 +427,16 @@ impl<B: Backend> MarkupParser<B> {
         self.current
     }
 
-    fn do_action(self: &mut Self) -> EventResponse {
+    fn do_action(&mut self) -> EventResponse {
         if self.current > -1 {
             let current = self.indexed_elements[self.current as usize].clone();
             let action = extract_attribute(current.attributes.clone(), "action");
             if self.actions.has_action(action.clone()) {
                 info!("Executing {}", action);
-                let new_state = self.actions.execute(action.clone(), self.state.clone());
-                if new_state.is_some() {
-                    let event_response = new_state.unwrap();
+                let new_state = self
+                    .actions
+                    .execute(action, self.state.clone(), Some(current));
+                if let Some(event_response) = new_state {
                     return event_response;
                 }
             }
@@ -344,34 +444,30 @@ impl<B: Backend> MarkupParser<B> {
         EventResponse::NOOP
     }
 
-    fn get_element_styles(
-        &self,
-        node: &MarkupElement,
-        focus: bool,
-    ) -> Style {
+    fn get_element_styles(&self, node: &MarkupElement, focus: bool, active: bool) -> Style {
+        let name = node.name.clone();
         let parent = node.parent_node.clone();
-        let parent_styles = if parent.is_some() {
-            let parent = parent.unwrap();
-            let parent = parent.as_ref().borrow().to_owned();
-            self.get_element_styles(&parent, focus)
+        let parent_styles = if let Some(nref) = parent {
+            let parent = MarkupParser::<B>::extract_element(&nref);
+            self.get_element_styles(&parent, focus, active)
         } else {
             Style::default()
         };
-        let name = node.name.clone();
-        let rulename = format!("{}{}", name, if focus { ":focus" } else { "" });
+        let rulename = if focus {
+            format!("{}{}", name, if focus { ":focus" } else { "" })
+        } else if active {
+            format!("{}{}", name, if active { ":active" } else { "" })
+        } else {
+            name
+        };
         let base_styles = parent_styles.patch(self.global_styles.get_rule(rulename));
         let rulename = format!("#{}", node.id);
         let elm_styles = self.global_styles.get_rule(rulename);
-        let base_styles = base_styles.patch(elm_styles);
-        base_styles
+
+        base_styles.patch(elm_styles)
     }
 
-    fn draw_element(
-        self: &mut Self,
-        frame: &mut Frame<B>,
-        area: Rect,
-        node: &MarkupElement,
-    ) -> bool {
+    fn draw_element(&mut self, frame: &mut Frame<B>, area: Rect, node: &MarkupElement) -> bool {
         let name = node.name.clone();
         let name = name.as_str();
         let storage = self.storage.clone();
@@ -380,65 +476,122 @@ impl<B: Backend> MarkupParser<B> {
         let storage = storage.borrow_mut();
         if storage.has_component(name) {
             storage.render(name, frame);
-            return true;
+            true
         } else {
             let mut cid = "".to_owned();
             if self.current > -1 {
                 cid = self.indexed_elements[self.current as usize].id.clone();
             }
-            let is_same_node = node.id.eq(&cid);
-            let base_styles = self.get_element_styles(&node, is_same_node);
+            let is_focused_node = node.id.eq(&cid);
+            let is_active_tab = if node.parent_node.is_some() {
+                let parent_node: MarkupElement =
+                    node.parent_node.clone().unwrap().as_ref().borrow().clone();
+                let parent_id = parent_node.id;
+                let state_elm = format!("{}:index", parent_id);
+                let current = self.state.get(&state_elm);
+                if let Some(current) = current {
+                    let currval = current;
+                    currval.eq(&node.id)
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+            let base_styles = self.get_element_styles(node, is_focused_node, is_active_tab);
             match name {
                 "container" | "block" => {
-                    let widget = self.draw_block(&node, area.clone(), is_same_node, base_styles);
-                    frame.render_widget(Clear, area.clone());
+                    let widget = self.draw_block(node, area, is_focused_node, false, base_styles);
+                    frame.render_widget(Clear, area);
                     frame.render_widget(widget, area);
-                    return true;
+                    true
+                }
+                "tabs-borders" => {
+                    let widget =
+                        self.draw_tab_borders(node, area, is_focused_node, false, base_styles);
+                    frame.render_widget(widget, area);
+                    true
                 }
                 "p" => {
-                    let widget =
-                        self.draw_paragraph(&node, area.clone(), is_same_node, base_styles);
-                    frame.render_widget(Clear, area.clone());
+                    let widget = self.draw_paragraph(node, area, is_focused_node, false, base_styles);
+                    frame.render_widget(Clear, area);
                     frame.render_widget(widget, area);
-                    return true;
+                    true
+                }
+                "tabs" => {
+                    let id = format!("{}:index", node.id.clone());
+                    if self.state.get(&id).is_none() {
+                        let mut state = self.state.clone();
+                        let thdr = node.children.first();
+                        if let Some(wrapped_value) = thdr {
+                            let plain_elm = MarkupParser::<B>::extract_element(wrapped_value);
+                            let frst = plain_elm.children.first();
+                            if let Some(first) = frst {
+                                let chld = MarkupParser::<B>::extract_element(first);
+                                state.insert(id, chld.id);
+                            }
+                        }
+                        self.state = state;
+                    }
+                    true
+                }
+                "tab-item" => {
+                    let widget =
+                        self.draw_tab_item(node, area, is_focused_node, is_active_tab, base_styles);
+                    frame.render_widget(Clear, area);
+                    frame.render_widget(widget, area);
+                    true
+                }
+                "tab-content" => {
+                    let default_val = "unknown".to_string();
+                    let show_flag = node.attributes.get("tabs-id").unwrap_or(&default_val);
+                    let show_flag = format!("{}:index", show_flag);
+                    let state_value = self.state.get(&show_flag).unwrap_or(&default_val);
+                    let me = node.attributes.get("for").unwrap_or(&default_val);
+                    if state_value.eq(me) {
+                        let widget = self.draw_block(node, area, is_focused_node, false, base_styles);
+                        frame.render_widget(Clear, area);
+                        frame.render_widget(widget, area);
+                        return true;
+                    }
+                    false
                 }
                 "dialog" => {
                     let new_node = node.clone();
                     let show_flag = extract_attribute(new_node.clone().attributes, "show");
                     let default_val = "false".to_string();
                     let state_value = self.state.get(&show_flag).unwrap_or(&default_val);
-                    if state_value.clone().eq(&"true".to_string()) {
-                        self.add_context(&node);
+                    if state_value.eq(&"true".to_string()) {
+                        self.add_context(node);
                         let widget =
-                            self.draw_dialog(&new_node, area.clone(), is_same_node, base_styles);
-                        frame.render_widget(Clear, area.clone());
+                            self.draw_dialog(&new_node, area, is_focused_node, false, base_styles);
+                        frame.render_widget(Clear, area);
                         frame.render_widget(widget, area);
                         return true;
                     } else {
-                        self.remove_context(&node);
+                        self.remove_context(node);
                     }
-                    return false;
+                    false
                 }
                 "button" => {
-                    let mut new_area = area.clone();
+                    let mut new_area = area;
                     new_area.height = if new_area.height > 3 {
                         3
                     } else {
                         new_area.height
                     };
-                    let widget =
-                        self.draw_button(&node, new_area.clone(), is_same_node, base_styles);
-                    frame.render_widget(Clear, area.clone());
+                    let widget = self.draw_button(node, new_area, is_focused_node, false, base_styles);
+                    frame.render_widget(Clear, area);
                     frame.render_widget(widget, new_area);
-                    return true;
+                    true
                 }
                 _ => {
                     let widget = Block::default();
-                    frame.render_widget(Clear, area.clone());
+                    frame.render_widget(Clear, area);
                     frame.render_widget(widget, area);
-                    return true;
+                    true
                 }
-            };
+            }
         }
     }
 
@@ -468,6 +621,8 @@ impl<B: Backend> MarkupParser<B> {
             split_space.clone(),
         );
 
+        // println!("\n\n==> {}[{:?}]: {:?}\n\n", id.clone(), current.attributes.clone(), split_space.clone());
+
         for (position, base_child) in node.children.iter().enumerate() {
             let child = base_child.as_ref().borrow();
             let constraint = extract_attribute(child.clone().attributes, "constraint");
@@ -492,8 +647,6 @@ impl<B: Backend> MarkupParser<B> {
             .constraints(constraints.clone().as_ref());
         let chunks = layout.split(split_space);
 
-        // println!("{} => {:?} {:#?}", id, constraints.clone(), chunks.clone());
-
         for (cntr, base_child) in children_nodes.iter() {
             let counter = *cntr;
             let mut child = base_child.clone();
@@ -504,7 +657,7 @@ impl<B: Backend> MarkupParser<B> {
                 frame,
                 &child,
                 dependency.clone(),
-                Some(chunks[counter].clone()),
+                Some(chunks[counter]),
                 None,
                 count + 1,
             );
@@ -522,10 +675,10 @@ impl<B: Backend> MarkupParser<B> {
                     mkp_elm.dependencies.push(did);
                 }
             }
-            res.push((chunks[counter].clone(), mkp_elm));
+            res.push((chunks[counter], mkp_elm));
         }
 
-        return res;
+        res
     }
 
     fn process_layout(
@@ -556,7 +709,7 @@ impl<B: Backend> MarkupParser<B> {
         let layout = Layout::default()
             .direction(direction)
             .margin(margin.unwrap_or(0))
-            .constraints(constraints.clone().as_ref());
+            .constraints(constraints.as_ref());
 
         let chunks = layout.split(split_space);
 
@@ -569,7 +722,7 @@ impl<B: Backend> MarkupParser<B> {
                 frame,
                 &child,
                 dependency.clone(),
-                Some(chunks[position].clone()),
+                Some(chunks[position]),
                 Some(1),
                 count + 1,
             );
@@ -585,7 +738,7 @@ impl<B: Backend> MarkupParser<B> {
             }
         }
 
-        return res;
+        res
     }
 
     fn process_other(
@@ -598,12 +751,26 @@ impl<B: Backend> MarkupParser<B> {
         count: usize,
     ) -> Option<Vec<(Rect, MarkupElement)>> {
         let mut current = node.clone();
+        /*
+        let mut parent_id = String::new();
+        if current.parent_node.is_some() {
+            parent_id = current
+                .parent_node
+                .clone()
+                .unwrap()
+                .as_ref()
+                .borrow()
+                .id
+                .clone();
+        }
+        */
         let id = extract_attribute(current.attributes.clone(), "id");
         let mut split_space = place.unwrap_or(frame.size());
-        let mut child_space = split_space.clone();
+        let mut child_space = split_space;
         let mut res: Vec<(Rect, MarkupElement)> = vec![];
         let mut subsequents: Vec<(Rect, MarkupElement)> = vec![];
         let mut dependency = depends_on;
+        let mut process_children = true;
 
         info!(target: "MarkupParser",
             "{}Other #{}[[{:?}]]",
@@ -612,7 +779,91 @@ impl<B: Backend> MarkupParser<B> {
             split_space.clone(),
         );
 
-        match node.name.as_str() {
+        let cname = node.name.as_str();
+        match cname {
+            "tabs" => {
+                let header_size = 3;
+                let vertical_layout = Layout::default()
+                    .direction(Direction::Vertical)
+                    .margin(margin.unwrap_or(0))
+                    .constraints(
+                        vec![
+                            Constraint::Length(header_size),
+                            Constraint::Length(split_space.height - header_size),
+                        ]
+                        .as_ref(),
+                    );
+                let vertical_chunks = vertical_layout.split(split_space);
+                for (pos, chld) in node.children.iter().enumerate() {
+                    let elm = chld.as_ref().borrow().clone();
+                    let child_space = vertical_chunks[pos];
+                    if pos > 0 {
+                        let partial_res = self.process_node(
+                            frame,
+                            &elm,
+                            None,
+                            Some(child_space),
+                            Some(1),
+                            count + 1,
+                        );
+                        for pair in partial_res.iter() {
+                            subsequents.push(pair.clone());
+                        }
+                    } else {
+                        let elm = chld.as_ref().borrow().clone();
+                        let start_x = vertical_chunks[0].x + 1;
+                        let start_y = vertical_chunks[0].y;
+                        let line = MarkupElement {
+                            id: "line_unk".to_string(),
+                            attributes: HashMap::new(),
+                            parent_node: None,
+                            children: vec![],
+                            name: "tabs-borders".to_string(),
+                            text: None,
+                            deep: 0,
+                            dependencies: vec![],
+                            order: -1,
+                        };
+                        let tab_width: u16 = 8;
+                        subsequents.push((vertical_chunks[0], line));
+                        for (_idx, chld) in elm.children.iter().enumerate() {
+                            let idx: u16 = _idx as u16;
+                            let chldelm = chld.as_ref().clone().into_inner();
+                            let order = 10 + (idx as i32);
+                            let btn = MarkupElement {
+                                id: chldelm.id.clone(),
+                                attributes: chldelm.attributes.clone(),
+                                parent_node: elm.parent_node.clone(),
+                                children: vec![],
+                                name: chldelm.name,
+                                text: chldelm.text.clone(),
+                                deep: chldelm.deep + 1,
+                                dependencies: vec![],
+                                order,
+                            };
+                            let place = Rect::new(
+                                start_x + (idx * tab_width) + (idx),
+                                start_y,
+                                tab_width + 1,
+                                2,
+                            );
+                            subsequents.push((place, btn));
+                        }
+                    }
+                }
+                process_children = false;
+            }
+            "tab-content" => {
+                let vertical_layout = Layout::default()
+                    .direction(Direction::Vertical)
+                    .margin(margin.unwrap_or(0))
+                    .constraints(
+                        vec![Constraint::Percentage(10), Constraint::Percentage(90)].as_ref(),
+                    );
+                let vertical_chunks = vertical_layout.split(split_space);
+                split_space = vertical_chunks[1];
+                dependency = Some(node.clone());
+            }
             "dialog" => {
                 let horizontal_layout = Layout::default()
                     .direction(Direction::Horizontal)
@@ -640,7 +891,7 @@ impl<B: Backend> MarkupParser<B> {
                     );
                 let vertical_chunks = vertical_layout.split(horizontal_chunks[1]);
 
-                split_space = vertical_chunks[1].clone();
+                split_space = vertical_chunks[1];
                 let dialog_space = vertical_chunks[1];
 
                 let dialog_parts = Layout::default()
@@ -653,7 +904,7 @@ impl<B: Backend> MarkupParser<B> {
 
                 let action = extract_attribute(node.attributes.clone(), "action");
                 let btns = extract_attribute(node.attributes.clone(), "buttons");
-                let btns: Vec<String> = btns.split("|").map(|x| String::from(x)).collect();
+                let btns: Vec<String> = btns.split('|').map(String::from).collect();
                 let btn_constraints: Vec<Constraint> = btns
                     .clone()
                     .iter()
@@ -668,7 +919,7 @@ impl<B: Backend> MarkupParser<B> {
 
                 for (elm_idx, btn) in btns.iter().enumerate() {
                     let btn_id = format!("{}_btn_{}", node.id, btn);
-                    let btn_action = if action.len() > 0 {
+                    let btn_action = if !action.is_empty() {
                         action.clone()
                     } else {
                         format!("on_{}", btn_id)
@@ -704,28 +955,30 @@ impl<B: Backend> MarkupParser<B> {
         }
         res.push((split_space, current));
 
-        for base_child in node.children.iter() {
-            let mut child = base_child.as_ref().borrow().clone();
-            if dependency.is_some() {
-                child.dependencies.push(dependency.clone().unwrap().id);
-            }
-            let partial_res = self.process_node(
-                frame,
-                &child,
-                dependency.clone(),
-                Some(child_space.clone()),
-                Some(1),
-                count + 1,
-            );
-            for pair in partial_res.iter() {
-                let mut mkp_elm = pair.1.clone();
+        if process_children {
+            for base_child in node.children.iter() {
+                let mut child = base_child.as_ref().borrow().clone();
                 if dependency.is_some() {
-                    let did = dependency.clone().unwrap().id;
-                    if !mkp_elm.dependencies.contains(&did) {
-                        mkp_elm.dependencies.push(did);
-                    }
+                    child.dependencies.push(dependency.clone().unwrap().id);
                 }
-                res.push((pair.0, mkp_elm));
+                let partial_res = self.process_node(
+                    frame,
+                    &child,
+                    dependency.clone(),
+                    Some(child_space),
+                    Some(1),
+                    count + 1,
+                );
+                for pair in partial_res.iter() {
+                    let mut mkp_elm = pair.1.clone();
+                    if dependency.is_some() {
+                        let did = dependency.clone().unwrap().id;
+                        if !mkp_elm.dependencies.contains(&did) {
+                            mkp_elm.dependencies.push(did);
+                        }
+                    }
+                    res.push((pair.0, mkp_elm));
+                }
             }
         }
 
@@ -761,25 +1014,25 @@ impl<B: Backend> MarkupParser<B> {
             _ => {
                 let res =
                     self.process_other(frame.borrow_mut(), node, depends_on, place, margin, count);
-                if res.is_none() {
+                if let Some(value) = res {
+                    value
+                } else {
                     warn!("Unknown node type \"{}\"", name);
                     vec![]
-                } else {
-                    res.unwrap()
                 }
             }
         };
-        return values;
+        values
     }
 
-    pub fn add_action(self: &mut Self, name: &str, action: ActionCallback) -> &mut Self {
+    pub fn add_action(&mut self, name: &str, action: ActionCallback) -> &mut Self {
         self.actions.add_action(String::from(name), action);
         self
     }
 
-    fn can_be_drawn(self: &Self, node: MarkupElement, drawn: &Vec<String>) -> bool {
+    fn can_be_drawn(&self, node: MarkupElement, drawn: &[String]) -> bool {
         let others = node.dependencies;
-        if others.len() == 0 {
+        if others.is_empty() {
             return true;
         }
         let mut res = false;
@@ -792,11 +1045,7 @@ impl<B: Backend> MarkupParser<B> {
     }
 
     fn get_fingerprint(&self) -> String {
-        let idxd: Vec<String> = self.indexed_elements
-            .iter()
-            .map(|x|{ x.id.clone() })
-            .collect()
-            ;
+        let idxd: Vec<String> = self.indexed_elements.iter().map(|x| x.id.clone()).collect();
         let mut state_fngrprnt = format!(
             "{}:{}:{}:",
             self.current,
@@ -816,7 +1065,7 @@ impl<B: Backend> MarkupParser<B> {
 
     /// Render the current state of the tree
     ///
-    pub fn render_ui(self: &mut Self, frame: &mut Frame<B>) {
+    pub fn render_ui(&mut self, frame: &mut Frame<B>) -> Result<bool, String> {
         let elm = self.root.clone();
         if elm.is_some() {
             let root = MarkupParser::<B>::get_element(elm);
@@ -826,18 +1075,23 @@ impl<B: Backend> MarkupParser<B> {
                 let area = pair.0;
                 let node = pair.1.clone();
                 if self.can_be_drawn(node.clone(), &drawn) {
+                    // println!("{} can be drawn...", &node.id);
                     let done = self.draw_element(frame, area, &node);
                     if done {
                         drawn.push(node.id);
                     }
+                } else {
+                    // println!("{} cant be drawn...", &node.id);
                 }
             });
+            Ok(true)
         } else {
-            panic!("Critical error parsing file. check file format.");
+            let err = "Critical error on render process.".to_string();
+            Err(err)
         }
     }
 
-    pub fn add_context(self: &mut Self, node: &MarkupElement) {
+    pub fn add_context(&mut self, node: &MarkupElement) {
         let loc = self.contexts.len();
         let current = self.contexts.get(loc);
         let must_insert = current.is_some() && !current.unwrap().0.eq(&node.id);
@@ -857,7 +1111,7 @@ impl<B: Backend> MarkupParser<B> {
         self.fingerprint = String::from("<>");
     }
 
-    pub fn remove_context(self: &mut Self, node: &MarkupElement) {
+    pub fn remove_context(&mut self, node: &MarkupElement) {
         let loc = self.contexts.len();
         if loc > 0 {
             let partial = self.contexts[loc - 1].clone();
@@ -870,7 +1124,7 @@ impl<B: Backend> MarkupParser<B> {
         self.fingerprint = String::from("<>");
     }
 
-    pub fn test_check(self: &Self, backend: B) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn test_check(&self, backend: B) -> Result<(), Box<dyn std::error::Error>> {
         let elm = self.root.clone();
         if elm.is_some() {
             let mut terminal = Terminal::new(backend)?;
@@ -895,7 +1149,7 @@ impl<B: Backend> MarkupParser<B> {
     /// - *on_event*: callback thar receive a key event.
     ///
     pub fn ui_loop(
-        self: &mut Self,
+        &mut self,
         backend: B,
         on_event: impl Fn(crossterm::event::KeyEvent, HashMap<String, String>) -> EventResponse,
         // on_event: impl Fn(crossterm::event::KeyEvent) -> bool,
@@ -906,6 +1160,10 @@ impl<B: Backend> MarkupParser<B> {
      // where
      //     Fut: Future<Output = bool>,
     {
+        if self.error.is_some() {
+            panic!("{}", self.error.clone().unwrap());
+        }
+
         let mut terminal = Terminal::new(backend)?;
 
         enable_raw_mode().expect("Can't run in raw mode.");
@@ -927,25 +1185,29 @@ impl<B: Backend> MarkupParser<B> {
                     }
                 }
 
-                if last_tick.elapsed() >= tick_rate {
-                    if let Ok(_) = tx.send(Event::Tick) {
-                        last_tick = Instant::now();
-                    }
+                if last_tick.elapsed() >= tick_rate && tx.send(Event::Tick).is_ok() {
+                    last_tick = Instant::now();
                 }
             }
         });
+        let mut error_info: Option<String> = None;
         let mut should_quit: bool = false;
         loop {
             let new_fprnt = self.get_fingerprint();
             if !new_fprnt.eq(&self.fingerprint) {
                 terminal.draw(|frame| {
-                    self.render_ui(frame);
-                    self.update_fingerprint();
+                    let res = self.render_ui(frame);
+                    if res.is_ok() {
+                        self.update_fingerprint();
+                    } else {
+                        error_info = res.err();
+                        should_quit = true;
+                    }
                 })?;
             }
             let evt: Event<crossterm::event::KeyEvent> = rx.recv()?;
             if let Event::Input(key_event) = evt {
-                let event = key_event.clone();
+                let event = key_event;
                 match event.code {
                     KeyCode::Tab => {
                         self.go_next();
@@ -961,6 +1223,10 @@ impl<B: Backend> MarkupParser<B> {
                             }
                             EventResponse::STATE(state) => {
                                 self.state = state;
+                            }
+                            EventResponse::CLEANFOCUS(state) => {
+                                self.state = state;
+                                self.current = -1;
                             }
                             _ => {}
                         }
@@ -978,6 +1244,10 @@ impl<B: Backend> MarkupParser<B> {
                     EventResponse::STATE(new_state) => {
                         self.state = new_state;
                     }
+                    EventResponse::CLEANFOCUS(new_state) => {
+                        self.state = new_state;
+                        self.current = -1;
+                    }
                     EventResponse::NOOP => {}
                 }
                 if should_quit {
@@ -987,8 +1257,11 @@ impl<B: Backend> MarkupParser<B> {
         }
 
         disable_raw_mode()?;
-        terminal.clear()?;
         terminal.show_cursor()?;
+        terminal.clear()?;
+        if error_info.is_some() {
+            panic!("{}", error_info.unwrap());
+        }
         Ok(())
     }
 
@@ -996,7 +1269,7 @@ impl<B: Backend> MarkupParser<B> {
 
     fn get_constraints(node: MarkupElement) -> Vec<Constraint> {
         let mut constraints: Vec<Constraint> = vec![];
-        if node.children.len() > 0 {
+        if !node.children.is_empty() {
             for (_position, base_child) in node.children.iter().enumerate() {
                 let child = base_child.as_ref().borrow().clone();
                 let constraint = extract_attribute(child.attributes.clone(), "constraint");
@@ -1007,8 +1280,13 @@ impl<B: Backend> MarkupParser<B> {
     }
 
     pub fn get_element(node: Option<Rc<RefCell<MarkupElement>>>) -> MarkupElement {
-        let r = node.clone().unwrap();
+        let r = node.unwrap();
         let r = r.as_ref().borrow().to_owned();
+        r
+    }
+
+    pub fn extract_element(node: &Rc<RefCell<MarkupElement>>) -> MarkupElement {
+        let r = node.as_ref().borrow().to_owned();
         r
     }
 
@@ -1022,16 +1300,18 @@ impl<B: Backend> MarkupParser<B> {
 
     pub fn get_border(border_value: &str) -> Borders {
         let border = String::from(border_value);
-        if border.contains("|") {
+        if border.contains('|') {
             let borders = border
-                .split("|")
-                .map(|s| String::from(s))
+                .split('|')
+                .map(String::from)
                 .map(|s| MarkupParser::<B>::get_border(&s))
                 .collect::<Vec<Borders>>();
             let size = borders.len();
             let mut res = borders[0];
-            for i in 1..size {
-                res |= borders[i];
+            // for i in 1..size {
+            //    res |= borders[i];
+            for border in borders.iter().take(size).skip(1) {
+                res |= *border;
             }
             return res;
         }
@@ -1047,8 +1327,8 @@ impl<B: Backend> MarkupParser<B> {
     }
 
     pub fn get_constraint(constraint: String) -> Constraint {
-        let res = if constraint.ends_with("%") {
-            let constraint_value = constraint.replace("%", "");
+        let res = if constraint.ends_with('%') {
+            let constraint_value = constraint.replace('%', "");
             let constraint_value = constraint_value.parse::<u16>().unwrap_or(1);
             Constraint::Percentage(constraint_value)
         } else if constraint.ends_with("min") {
@@ -1059,8 +1339,8 @@ impl<B: Backend> MarkupParser<B> {
             let constraint_value = constraint.replace("max", "");
             let constraint_value = constraint_value.parse::<u16>().unwrap_or(1);
             Constraint::Max(constraint_value)
-        } else if constraint.contains(":") {
-            let parts = constraint.split(":");
+        } else if constraint.contains(':') {
+            let parts = constraint.split(':');
             let parts: Vec<&str> = parts.collect();
             let x = String::from(parts[0]).parse::<u32>().unwrap_or(1);
             let y = String::from(parts[1]).parse::<u32>().unwrap_or(1);
@@ -1094,29 +1374,26 @@ impl<B: Backend> MarkupParser<B> {
     pub fn process_styles(node: MarkupElement) -> StylesStorage {
         let mut global_styles = StylesStorage::new();
         if node.text.is_some() {
-            let text = node.text.clone().unwrap();
+            let text = node.text.unwrap();
             let text = text
-                .replace("\n", "")
-                .replace("\r", "")
-                .replace(" ", "")
-                .replace("{", " {")
-                .replace("}", "}\n");
+                .replace(['\n', '\r', ' '], "")
+                .replace('{', " {")
+                .replace('}', "}\n");
             let rules: Vec<_> = text
-                .split("\n")
-                .filter(|x| x.len() > 0)
+                .split('\n')
+                .filter(|x| !x.is_empty())
                 .map(|text| {
-                    let nt = String::from(text.clone());
-                    let rule_info = nt.replace("}", "");
-                    let rule_info: Vec<String> =
-                        rule_info.split(" {").map(|x| String::from(x)).collect();
-                    let rules = rule_info.clone();
+                    let nt = String::from(text);
+                    let rule_info = nt.replace('}', "");
+                    let rule_info: Vec<String> = rule_info.split(" {").map(String::from).collect();
+                    let rules = rule_info;
                     let rulename: String = rules.get(0).unwrap().to_string();
                     let properties: String = rules.get(1).unwrap().to_string();
                     (rulename, MarkupParser::<B>::generate_styles(properties))
                 })
                 .collect();
             for (rulename, styles) in rules.iter() {
-                global_styles.add_rule(rulename.clone(), styles.clone());
+                global_styles.add_rule(rulename.clone(), *styles);
             }
         }
         global_styles
@@ -1128,9 +1405,9 @@ impl<B: Backend> MarkupParser<B> {
             return res;
         }
         let styles_vec = styles_text
-            .split(";")
-            .filter(|x| x.len() > 0)
-            .map(|style| style.split(":").map(|word| word.trim()).collect())
+            .split(';')
+            .filter(|x| !x.is_empty())
+            .map(|style| style.split(':').map(|word| word.trim()).collect())
             .map(|data: Vec<&str>| (data[0], data[1]))
             .collect::<Vec<(&str, &str)>>();
         let styles: HashMap<&str, &str> = styles_vec.into_iter().collect();
@@ -1148,11 +1425,17 @@ impl<B: Backend> MarkupParser<B> {
             let weight = modifier_from_str(styles.get("weight").unwrap());
             res = res.add_modifier(weight);
         }
+        if styles.contains_key("font-decoration") {
+            let decorations = modifiers_from_str(styles.get("font-decoration").unwrap());
+            res = res.patch(decorations);
+        }
+        // println!("-----------------\n{} \n\n {:#?}\n\n -----------------", &styles_text, res);
         res
     }
 
-    pub fn get_styles(node: &MarkupElement, focus: bool) -> Style {
+    pub fn get_styles(node: &MarkupElement, focus: bool, active: bool) -> Style {
         let key = if focus { "focus_styles" } else { "styles" };
+        let key = if active { "active_styles" } else { key };
         let styles_text = extract_attribute(node.attributes.clone(), key);
         MarkupParser::<B>::generate_styles(styles_text)
     }
