@@ -3,6 +3,22 @@ Rust library to use TUI and markup to build UI terminal interfaces.
 
 ## tl;dr;
 
+You can use the tool to generate a new project:
+```bash
+# Install the package
+cargo install tui-markup-renderer
+
+# this will show you some help messages
+tui-markup-gen -h
+
+# To create a simple project called dummy_project use the next line:
+tui-markup-gen -n dummy_name -t simple
+
+# To create a shell project called complex_project use the next line:
+tui-markup-gen -n complex_name -t shell
+
+```
+
 Xml Code:
 ```xml
 <layout id="root" direction="vertical">

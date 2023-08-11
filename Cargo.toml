@@ -1,6 +1,6 @@
 [package]
 name = "tui-markup-renderer"
-version = "1.1.0"
+version = "1.1.1"
 edition = "2021"
 
 description = "Rust library to use TUI and markup to build UI terminal interfaces."
@@ -18,7 +18,13 @@ crossterm = "0.25.0"
 serde = "1.0.150"
 log = "0.4.19"
 env_logger = "0.10.0"
+clap = { version = "4.3.19", features = ["derive"] }
 
 
 # futures = "0.3.28"
+
+[[bin]]
+edition = "2021"
+name = "tui-markup-gen"
+path = "src/generator.rs"
 
