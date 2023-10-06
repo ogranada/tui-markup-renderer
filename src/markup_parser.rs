@@ -22,7 +22,7 @@ use std::{
 use tui::{
     backend::Backend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Span, Spans},
     widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap},
     Frame, Terminal,
@@ -372,28 +372,30 @@ impl<B: Backend> MarkupParser<B> {
         &self,
         child: &MarkupElement,
         _area: Rect,
-        _focus: bool,
-        _active: bool,
+        focus: bool,
+        active: bool,
         base_styles: Style,
     ) -> Paragraph {
-        /*
-        let styles = if focus {
-            Style::default()
-                .fg(Color::Gray)
-                .add_modifier(Modifier::DIM)
-        } else {
-            Style::default()
-                .fg(Color::DarkGray)
-        };
+        let styles = Style::default()
+            .fg(Color::DarkGray)
+            ;
+
         let styles = if active {
-            styles.add_modifier(Modifier::BOLD)
+            styles
+                .fg(Color::Gray)
+                .add_modifier(Modifier::BOLD)
         } else {
             styles
         };
 
+        let styles = if focus {
+            styles
+                .fg(Color::White)
+                // .add_modifier(Modifier::BOLD)
+        } else {
+            styles
+        };
         let styles = styles.patch(base_styles);
-        */
-        let styles = base_styles;
         let text = child.text.clone();
         let text = text.unwrap_or("Tab".to_string());
         let block = Block::default()

@@ -72,7 +72,8 @@ mod markup_parser {
 
         let mut terminal = Terminal::new(backend)?;
         terminal.draw(|f| {
-            mp.render_ui(f);
+            let w = mp.render_ui(f);
+            w.unwrap_or(false);
         })?;
 
         let expected = Buffer::with_lines(vec![
@@ -81,7 +82,6 @@ mod markup_parser {
             "└─────────────┘",
         ]);
         terminal.backend().assert_buffer(&expected);
-        // assert_eq!(frame.buffer.get(3, 0).symbol, "H");
 
         Ok(())
     }
@@ -100,7 +100,8 @@ mod markup_parser {
         let backend = TestBackend::new(10, 10);
         let mut terminal = Terminal::new(backend)?;
         let frame = terminal.draw(|f| {
-            mp.render_ui(f);
+            let w = mp.render_ui(f);
+            w.unwrap_or(false);
         })?;
 
         assert_eq!(frame.buffer.get(1, 0).symbol, "N");
@@ -134,7 +135,8 @@ mod markup_parser {
         let backend = TestBackend::new(20, 10);
         let mut terminal = Terminal::new(backend)?;
         terminal.draw(|f| {
-            mp.render_ui(f);
+            let w = mp.render_ui(f);
+            w.unwrap_or(false);
         })?;
 
         let expected = Buffer::with_lines(vec![
@@ -168,7 +170,8 @@ mod markup_parser {
         let backend = TestBackend::new(20, 10);
         let mut terminal = Terminal::new(backend)?;
         let frame = terminal.draw(|f| {
-            mp.render_ui(f);
+            let w = mp.render_ui(f);
+            w.unwrap_or(false);
         })?;
 
         assert_eq!(frame.buffer.get(1, 0).symbol, "N");
@@ -202,7 +205,8 @@ mod markup_parser {
         let backend = TestBackend::new(20, 10);
         let mut terminal = Terminal::new(backend)?;
         terminal.draw(|f| {
-            mp.render_ui(f);
+            let w = mp.render_ui(f);
+            w.unwrap_or(false);
         })?;
 
         let expected = Buffer::with_lines(vec![
